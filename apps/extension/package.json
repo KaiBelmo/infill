@@ -1,0 +1,36 @@
+{
+  "name": "@infill/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@infill/form-brain": "workspace:*",
+    "@infill/profile-vault": "workspace:*",
+    "@infill/shared": "workspace:*",
+    "@vitejs/plugin-react": "^5.1.2",
+    "ky": "^2.0.2",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "vite": "^7.3.0",
+    "webext-bridge": "^6.0.1",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.4.0",
+    "@tailwindcss/vite": "^4.2.4",
+    "@types/chrome": "^0.1.33",
+    "@types/node": "^24.10.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^5.9.3",
+    "vite-plugin-zip-pack": "^1.2.4",
+    "vitest": "^4.0.14"
+  }
+}

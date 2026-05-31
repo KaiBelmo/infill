@@ -1,0 +1,137 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Malicious Form — Red Team Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; padding: 2rem; color: #1a1a1a; }
+    h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
+    fieldset { border: 1px solid #ddd; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem; background: #fff; }
+    legend { font-weight: 600; font-size: 0.95rem; padding: 0 0.5rem; color: #333; }
+    .row { display: flex; gap: 1rem; margin-bottom: 0.75rem; }
+    .row > * { flex: 1; }
+    label { display: block; font-size: 0.8rem; font-weight: 500; margin-bottom: 0.25rem; color: #444; }
+    input, select, textarea { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; }
+    .submit-row { text-align: center; margin-top: 1rem; }
+    button[type="submit"] { padding: 0.65rem 2.5rem; font-size: 1rem; font-weight: 600; color: #fff; background: #2563eb; border: none; border-radius: 6px; cursor: pointer; }
+  </style>
+</head>
+<body>
+<h1>Account Verification</h1>
+<form id="malicious-form" autocomplete="off">
+  <!-- Normal-looking fields -->
+  <fieldset>
+    <legend>Your Details</legend>
+    <div class="row">
+      <div>
+        <label for="first-name">First Name</label>
+        <input type="text" id="first-name" name="firstName" placeholder="John">
+      </div>
+      <div>
+        <label for="last-name">Last Name</label>
+        <input type="text" id="last-name" name="lastName" placeholder="Doe">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" placeholder="john@example.com">
+      </div>
+    </div>
+  </fieldset>
+
+  <!-- Misleading labels: label says "Company" but name/autocomplete says password -->
+  <fieldset>
+    <legend>Employment</legend>
+    <div class="row">
+      <div>
+        <label for="company-name">Company Name</label>
+        <input type="text" id="company-name" name="company" autocomplete="organization" placeholder="Acme Inc">
+      </div>
+      <div>
+        <!-- Trick: label says "Office Code" but it's actually a password field -->
+        <label for="office-code">Office Code</label>
+        <input type="password" id="office-code" name="officeCode" autocomplete="current-password">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <!-- Trick: label says "Department ID" but autocomplete hints at credit card -->
+        <label for="dept-id">Department ID</label>
+        <input type="text" id="dept-id" name="deptId" autocomplete="cc-number" placeholder="Enter department code">
+      </div>
+      <div>
+        <!-- Trick: label says "Badge Number" but name suggests SSN -->
+        <label for="badge-number">Badge Number</label>
+        <input type="text" id="badge-number" name="ssn" autocomplete="ssn" placeholder="Enter badge #">
+      </div>
+    </div>
+  </fieldset>
+
+  <!-- Offscreen / opacity:0 / aria-hidden fields -->
+  <div style="position:absolute;left:-9999px;opacity:0;height:0;overflow:hidden" aria-hidden="true">
+    <label for="secret-field">Secret Token</label>
+    <input type="text" id="secret-field" name="secretToken" value="leaked-token-123">
+    <label for="recovery-phrase">Recovery Phrase</label>
+    <input type="text" id="recovery-phrase" name="recoveryPhrase" value="word1 word2 word3 word4">
+  </div>
+
+  <!-- Duplicate field names to confuse matching -->
+  <fieldset>
+    <legend>Emergency Contact</legend>
+    <div class="row">
+      <div>
+        <label for="emergency-name">Contact Name</label>
+        <input type="text" id="emergency-name" name="firstName" placeholder="Jane">
+      </div>
+      <div>
+        <label for="emergency-email">Contact Email</label>
+        <input type="email" id="emergency-email" name="email" placeholder="jane@example.com">
+      </div>
+    </div>
+  </fieldset>
+
+  <!-- contenteditable "field" that looks like an input -->
+  <fieldset>
+    <legend>Notes</legend>
+    <div id="custom-note" contenteditable="true" role="textbox" aria-label="Additional notes"
+         style="border:1px solid #ccc;border-radius:6px;padding:0.5rem 0.75rem;min-height:40px;font-size:0.9rem;color:#1a1a1a">
+      Type your notes here...
+    </div>
+  </fieldset>
+
+  <div class="submit-row">
+    <button type="submit">Verify Account</button>
+  </div>
+</form>
+
+<!-- Malicious script: tries to observe extension behavior -->
+<script>
+  // Monitor all input/change events to detect extension fill
+  window.__observedEvents = [];
+  document.addEventListener('input', function(e) {
+    window.__observedEvents.push({ type: 'input', target: e.target.id || e.target.name, value: e.target.value });
+  }, true);
+  document.addEventListener('change', function(e) {
+    window.__observedEvents.push({ type: 'change', target: e.target.id || e.target.name, value: e.target.value });
+  }, true);
+
+  // Try to detect if extension exposed anything on window/chrome
+  window.__extensionProbe = {
+    hasInfillGlobal: typeof window.__INFILL_LOADED__ !== 'undefined',
+    hasInfill: document.querySelector('#infill-cursor') !== null,
+    chromeRuntime: typeof window.chrome !== 'undefined' && typeof window.chrome.runtime !== 'undefined' && typeof window.chrome.runtime.id !== 'undefined',
+  };
+
+  // Try to submit form data externally (should be blocked by extension)
+  document.getElementById('malicious-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    window.__formSubmitted = true;
+    // Attempt to exfiltrate — in a real test this would be a network call
+    window.__exfilAttempt = Array.from(new FormData(e.target).entries());
+  });
+</script>
+</body>
+</html>

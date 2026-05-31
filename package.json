@@ -1,0 +1,20 @@
+{
+  "name": "infill",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source browser extension workspace for Infill.",
+  "packageManager": "pnpm@10.30.0",
+  "scripts": {
+    "build": "corepack pnpm --filter @infill/shared build && corepack pnpm --filter @infill/form-brain build && corepack pnpm --filter @infill/profile-vault build && corepack pnpm --filter @infill/extension build",
+    "dev": "corepack pnpm --dir apps/extension run dev",
+    "dev:extension": "corepack pnpm --dir apps/extension run dev",
+    "test": "corepack pnpm -r test",
+    "typecheck": "corepack pnpm --filter @infill/shared build && corepack pnpm --filter @infill/form-brain build && corepack pnpm --filter @infill/profile-vault build && corepack pnpm --filter @infill/extension typecheck"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"],
+    "overrides": {
+      "rollup@<2.80.0": "^2.80.0"
+    }
+  }
+}

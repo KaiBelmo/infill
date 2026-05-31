@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@infill/shared": ["packages/shared/src/index.ts"],
+      "@infill/form-brain": ["packages/form-brain/src/index.ts"],
+      "@infill/profile-vault": ["packages/profile-vault/src/index.ts"]
+    }
+  }
+}

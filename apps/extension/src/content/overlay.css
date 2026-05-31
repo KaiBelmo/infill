@@ -1,0 +1,268 @@
+:host {
+  position: absolute;
+  z-index: 2147483646;
+  pointer-events: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.pf-icon {
+  position: absolute;
+  right: -28px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #0b0b0d;
+  border: 1px solid #0b0b0d;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 150ms ease, transform 150ms ease, background 150ms ease, color 150ms ease;
+  box-shadow: 0 -8px 22px rgba(255, 255, 255, .42);
+}
+
+:host(:hover) .pf-icon,
+.pf-icon.pf-focused {
+  opacity: 1;
+}
+
+.pf-icon:hover {
+  transform: translateY(-50%) scale(1.04);
+}
+
+.pf-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.pf-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 180px;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .14);
+  padding: 4px 0;
+  pointer-events: auto;
+  z-index: 2147483647;
+  font-size: 13px;
+  color: #1a1a1a;
+}
+
+.pf-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 100ms;
+}
+
+.pf-dropdown-item:hover {
+  background: #f3f4f6;
+}
+
+.pf-dropdown-item svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.pf-dropdown-sep {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+
+.pf-source {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  background: #0b0b0d;
+  color: #ffffff;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  pointer-events: none;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+:host(:hover) .pf-source {
+  opacity: 1;
+}
+
+.pf-sensitive-badge {
+  position: absolute;
+  right: -6px;
+  top: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 1.5px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+  font-size: 9px;
+  color: #fff;
+  font-weight: 700;
+}
+
+.pf-missing-badge {
+  position: absolute;
+  right: -28px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, .2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  box-shadow: 0 -8px 22px rgba(0, 0, 0, .14);
+  font-size: 16px;
+  color: #0b0b0d;
+  font-weight: 800;
+  line-height: 1;
+  animation: pf-badge-enter 420ms cubic-bezier(.22,1,.36,1) both;
+  transition: background 240ms ease, border-color 240ms ease, color 240ms ease, box-shadow 240ms ease, transform 320ms cubic-bezier(.22,1,.36,1);
+}
+
+@keyframes pf-badge-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(.88);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+.pf-missing-badge[data-state="saved"] {
+  box-shadow: 0 -5px 22px rgba(255, 255, 255, .42);
+}
+
+.pf-missing-badge[data-state="conflict"] {
+  box-shadow: 0 -8px 22px rgba(0, 0, 0, .14);
+}
+
+.pf-missing-badge::before,
+.pf-missing-badge::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 11px;
+  height: 2.5px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.pf-missing-badge::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.pf-missing-badge[data-state]::before,
+.pf-missing-badge[data-state]::after {
+  content: none;
+}
+
+.pf-missing-badge svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.pf-missing-badge:hover {
+  transform: translateY(-50%) scale(1.04);
+}
+
+.pf-missing-tip {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  max-width: 240px;
+  background: #0b0b0d;
+  border: 1px solid rgba(255, 255, 255, .14);
+  color: rgba(255, 255, 255, .76);
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 7px 9px;
+  border-radius: 10px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .2);
+}
+
+:host(:hover) .pf-missing-tip {
+  opacity: 1;
+}
+
+.pf-learn-feedback {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(260px, 100vw - 32px);
+  border-radius: 12px;
+  padding: 8px 10px;
+  pointer-events: auto;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .16);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  z-index: 2147483647;
+}
+
+.pf-learn-feedback-success {
+  background: #0b0b0d;
+  border: 1px solid #0b0b0d;
+  color: #ffffff;
+}
+
+.pf-learn-feedback-warning {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, .18);
+  color: #0b0b0d;
+}
+
+.pf-learn-feedback-muted {
+  background: #f5f5f7;
+  border: 1px solid rgba(0, 0, 0, .12);
+  color: #5f5f5f;
+}
+
+.pf-learn-feedback button {
+  appearance: none;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 2px 7px;
+  text-decoration: none;
+}
