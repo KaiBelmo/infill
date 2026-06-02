@@ -294,6 +294,7 @@ export function useOptionsState() {
     lockEncryptedSync: actions.lockEncryptedSync,
     toggleCloudAssist: cloudActions.toggleCloudAssist,
     saveLocalOllamaConfig: cloudActions.saveLocalOllamaConfig,
+    detectLocalOllamaModels: cloudActions.detectLocalOllamaModels,
     refreshSessionState: cloudActions.refreshSession,
     disconnectCloud: cloudActions.disconnectCloud,
     openBillingPage: cloudActions.openBilling,

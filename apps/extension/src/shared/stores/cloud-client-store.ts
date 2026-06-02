@@ -34,6 +34,12 @@ type CloudClientActions = {
     ollamaModel: string;
     localOllamaFallbackToCloud: boolean;
   }) => Promise<string>;
+  detectLocalOllamaModels: (input: { baseUrl: string; model?: string }) => Promise<{
+    clearModels?: boolean;
+    message: string;
+    models: string[];
+    selectedModel?: string;
+  }>;
   refreshSession: () => Promise<string>;
   disconnectCloud: () => Promise<string>;
   openCheckout: () => Promise<string>;
@@ -129,6 +135,40 @@ export const useCloudClientStore = create<CloudClientState & CloudClientActions>
       const msg = normalizeCloudMessage(error instanceof Error ? `Ollama is not reachable: ${error.message}` : "Ollama is not reachable. Check that Ollama is running, then save AI settings again.");
       set({ cloudMessage: msg });
       return msg;
+    }
+  },
+
+  async detectLocalOllamaModels(input) {
+    try {
+      const health = await checkLocalOllama(input);
+      if (!health.ok) {
+        const msg = "Ollama is reachable, but no local models are installed.";
+        const next = await saveCloudConfig({
+          ollamaBaseUrl: health.baseUrl,
+          ollamaModelOptions: []
+        });
+        set({ ...deriveCloudFlags(next), cloudMessage: msg });
+        return { clearModels: true, message: msg, models: [], selectedModel: undefined };
+      }
+
+      const selectedSuffix = health.selectedModel ? ` Selected ${health.selectedModel}.` : "";
+      const versionSuffix = health.version ? ` Ollama ${health.version}.` : "";
+      const msg = `Found ${health.modelCount} Ollama model${health.modelCount === 1 ? "" : "s"}.${selectedSuffix}${versionSuffix}`;
+      const next = await saveCloudConfig({
+        ollamaBaseUrl: health.baseUrl,
+        ollamaModel: health.selectedModel ?? input.model ?? "",
+        ollamaModelOptions: health.models
+      });
+      set({ ...deriveCloudFlags(next), cloudMessage: msg });
+      return {
+        message: msg,
+        models: health.models,
+        selectedModel: health.selectedModel
+      };
+    } catch (error) {
+      const msg = normalizeCloudMessage(error instanceof Error ? `Ollama is not reachable: ${error.message}` : "Ollama is not reachable. Check that Ollama is running, then try again.");
+      set({ cloudMessage: msg });
+      return { clearModels: false, message: msg, models: [], selectedModel: undefined };
     }
   },
 

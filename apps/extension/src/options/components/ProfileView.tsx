@@ -54,6 +54,12 @@ type ProfileViewProps = {
     ollamaModel: string;
     localOllamaFallbackToCloud: boolean;
   }) => Promise<string>;
+  detectLocalOllamaModels: (input: { baseUrl: string; model?: string }) => Promise<{
+    clearModels?: boolean;
+    message: string;
+    models: string[];
+    selectedModel?: string;
+  }>;
   refreshSessionState: () => Promise<string | void>;
   disconnectCloud: () => Promise<string | void>;
   openBillingPage: () => void;
@@ -104,6 +110,7 @@ function ProfileViewComponent(props: ProfileViewProps) {
     lockEncryptedSync,
     toggleCloudAssist,
     saveLocalOllamaConfig,
+    detectLocalOllamaModels,
     refreshSessionState,
     disconnectCloud,
     openBillingPage,
@@ -118,6 +125,8 @@ function ProfileViewComponent(props: ProfileViewProps) {
   const [localOllamaEnabled, setLocalOllamaEnabled] = useState(false);
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState("http://localhost:11434/v1");
   const [ollamaModel, setOllamaModel] = useState("llama3.1");
+  const [detectedOllamaModels, setDetectedOllamaModels] = useState<string[]>([]);
+  const [detectingOllamaModels, setDetectingOllamaModels] = useState(false);
   const [localOllamaFallbackToCloud] = useState(false);
   const [passphraseInput, setPassphraseInput] = useState("");
   const [showEnableSyncPrompt, setShowEnableSyncPrompt] = useState(false);
@@ -145,7 +154,11 @@ function ProfileViewComponent(props: ProfileViewProps) {
     setOllamaModel((current) => (
       current === cloudConfig.ollamaModel ? current : cloudConfig.ollamaModel
     ));
-  }, [cloudConfig?.localOllamaEnabled, cloudConfig?.ollamaBaseUrl, cloudConfig?.ollamaModel]);
+    setDetectedOllamaModels((current) => {
+      const next = cloudConfig.ollamaModelOptions ?? [];
+      return current.length === next.length && current.every((item, index) => item === next[index]) ? current : next;
+    });
+  }, [cloudConfig?.localOllamaEnabled, cloudConfig?.ollamaBaseUrl, cloudConfig?.ollamaModel, cloudConfig?.ollamaModelOptions]);
 
   useEffect(() => {
     if (!dialog) return;
@@ -203,6 +216,26 @@ function ProfileViewComponent(props: ProfileViewProps) {
     saveLocalOllamaConfig,
     setStatus
   ]);
+
+  const detectOllamaModels = useCallback(async () => {
+    setDetectingOllamaModels(true);
+    setStatus("Checking local Ollama models...");
+    try {
+      const result = await detectLocalOllamaModels({
+        baseUrl: ollamaBaseUrl,
+        model: ollamaModel
+      });
+      if (result.models.length > 0 || result.clearModels) {
+        setDetectedOllamaModels(result.models);
+      }
+      if (result.selectedModel) {
+        setOllamaModel(result.selectedModel);
+      }
+      setStatus(result.message);
+    } finally {
+      setDetectingOllamaModels(false);
+    }
+  }, [detectLocalOllamaModels, ollamaBaseUrl, ollamaModel, setStatus]);
 
   const toggleCloudAssistAndReport = useCallback(async () => {
     const message = await toggleCloudAssist(!cloudAssistEnabled);
@@ -482,11 +515,23 @@ function ProfileViewComponent(props: ProfileViewProps) {
                 <div className="grid gap-3">
                   <label className="grid gap-2">
                     <span className="text-sm font-semibold text-[var(--color-ink)]">Ollama base URL</span>
-                    <input className={inputClassSm} value={ollamaBaseUrl} onChange={(event) => setOllamaBaseUrl(event.target.value)} />
+                    <input className={inputClassSm} value={ollamaBaseUrl} onChange={(event) => {
+                      setOllamaBaseUrl(event.target.value);
+                      setDetectedOllamaModels([]);
+                    }} />
                   </label>
+                  <button className={secondaryButtonClassMd} type="button" disabled={detectingOllamaModels} onClick={detectOllamaModels}>
+                    {detectingOllamaModels ? "Detecting models..." : "Detect Ollama models"}
+                  </button>
                   <label className="grid gap-2">
                     <span className="text-sm font-semibold text-[var(--color-ink)]">Ollama model</span>
-                    <input className={inputClassSm} value={ollamaModel} onChange={(event) => setOllamaModel(event.target.value)} />
+                    {detectedOllamaModels.length > 0 ? (
+                      <select className={inputClassSm} value={ollamaModel} onChange={(event) => setOllamaModel(event.target.value)}>
+                        {detectedOllamaModels.map((model) => <option key={model} value={model}>{model}</option>)}
+                      </select>
+                    ) : (
+                      <input className={inputClassSm} value={ollamaModel} onChange={(event) => setOllamaModel(event.target.value)} />
+                    )}
                   </label>
                   <button className={primaryButtonClass} type="button" onClick={saveOllamaSettings}>Save AI settings</button>
                 </div>

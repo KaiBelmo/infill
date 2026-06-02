@@ -10,6 +10,7 @@ export type CloudConfig = {
   localOllamaEnabled: boolean;
   ollamaBaseUrl: string;
   ollamaModel: string;
+  ollamaModelOptions: string[];
   localOllamaFallbackToCloud: boolean;
 };
 

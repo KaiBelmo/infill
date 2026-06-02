@@ -183,6 +183,7 @@ function Options() {
             lockEncryptedSync={state.lockEncryptedSync}
             toggleCloudAssist={state.toggleCloudAssist}
             saveLocalOllamaConfig={state.saveLocalOllamaConfig}
+            detectLocalOllamaModels={state.detectLocalOllamaModels}
             refreshSessionState={state.refreshSessionState}
             disconnectCloud={state.disconnectCloud}
             openBillingPage={state.openBillingPage}

@@ -9,6 +9,7 @@ type OllamaTagsResponse = {
 export type OllamaHealthResult = {
   baseUrl: string;
   modelCount: number;
+  models: string[];
   ok: boolean;
   selectedModel?: string;
   version?: string;
@@ -45,6 +46,7 @@ export async function checkLocalOllama(input: { baseUrl: string; model?: string 
     return {
       baseUrl,
       modelCount: models.length,
+      models,
       ok: models.length > 0,
       selectedModel,
       version: version || undefined

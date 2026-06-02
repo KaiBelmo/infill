@@ -23,6 +23,7 @@ function defaultConfig(): CloudConfig {
     localOllamaEnabled: false,
     ollamaBaseUrl: "http://localhost:11434/v1",
     ollamaModel: "llama3.1",
+    ollamaModelOptions: [],
     localOllamaFallbackToCloud: false
   };
 }
@@ -101,7 +102,8 @@ export const useCloudStore = create<CloudState & CloudStoreActions>()(
           apiBaseUrl: validateCloudBaseUrl(trimBaseUrl(input.apiBaseUrl ?? current.apiBaseUrl), "API"),
           webBaseUrl: validateCloudBaseUrl(trimBaseUrl(input.webBaseUrl ?? current.webBaseUrl), "web"),
           ollamaBaseUrl: validateOllamaBaseUrl(trimBaseUrl(input.ollamaBaseUrl ?? current.ollamaBaseUrl)),
-          ollamaModel: (input.ollamaModel ?? current.ollamaModel).trim() || defaultConfig().ollamaModel
+          ollamaModel: (input.ollamaModel ?? current.ollamaModel).trim() || defaultConfig().ollamaModel,
+          ollamaModelOptions: sanitizeOllamaModelOptions(input.ollamaModelOptions ?? current.ollamaModelOptions)
         };
         set({ config: next });
         return get().getCloudState();
@@ -176,6 +178,11 @@ export const useCloudStore = create<CloudState & CloudStoreActions>()(
 
 function trimBaseUrl(value: string): string {
   return value.trim().replace(/\/$/, "");
+}
+
+function sanitizeOllamaModelOptions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean))];
 }
 
 function validateCloudBaseUrl(value: string, label: string): string {
