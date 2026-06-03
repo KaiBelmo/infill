@@ -209,11 +209,13 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
         const systemPrompt = [
           "You produce JSON only.",
           "Parse the user's raw profile text into structured fields.",
-          "Extract: first name, last name, full name, email, phone, company, job title, street, city, state/region, zip/postal code, country, and any other identifiable fields.",
-          "Use these profile key prefixes: identity (first_name, last_name, full_name, middle_name), contact (email, phone), address (street_1, street_2, city, region, postal_code, country), work (current_title), company (name).",
+          "Extract: first name, last name, full name, email, phone, company, job title, street, city, state/region, zip/postal code, country, social links, personal websites, portfolios, and any other identifiable websites.",
+          "Use these profile key prefixes: identity (first_name, last_name, full_name, middle_name), contact (email, phone, website, linkedin, github, facebook, twitter, instagram, youtube, gitlab, medium, stackoverflow), address (street_1, street_2, city, region, postal_code, country), work (current_title), company (name).",
           "For anything that doesn't fit, use the 'custom' prefix.",
-          "Return a JSON object where each key is the field label and each value is the parsed answer.",
-          "Example: {\"First Name\": \"Sam\", \"Email\": \"sam@example.com\", \"City\": \"Austin\"}",
+          "Return a flat JSON object where each key is the shortest form-field label or profile key that should be used for filling, and each value is only the exact field value.",
+          "Keys must match likely input fields such as First Name, Last Name, Email, Phone, Website, Portfolio, LinkedIn, GitHub, City, State/Region, Postal Code, Country, or canonical keys such as address.city and contact.linkedin.",
+          "Do not put source notes, confidence, provenance, explanations, assumptions, or phrases like 'from platform-provided location estimate' in values.",
+          "Example: {\"First Name\": \"Sam\", \"Email\": \"sam@example.com\", \"City\": \"Austin\", \"LinkedIn\": \"https://www.linkedin.com/in/sam\", \"Website\": \"https://sam.example\"}",
           "Never include passwords, payment details, government IDs, or secret values."
         ].join(" ");
 
@@ -254,10 +256,14 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
         const llmFacts: ReviewableFact[] = [];
         for (const [label, rawValue] of Object.entries(parsedObj)) {
           const valStr = typeof rawValue === "string" ? rawValue.trim() : String(rawValue).trim();
-          const value = valStr.replace(/(?:\s*\[[^\]\r\n]{1,80}\]\s*)+$/g, "").trim(); // strip brackets
+          const value = valStr
+            .replace(/(?:\s*\[[^\]\r\n]{1,80}\]\s*)+$/g, "")
+            .replace(/\s+from\s+platform-provided\s+location\s+estimates?\.?$/i, "")
+            .replace(/\s+from\s+location\s+estimates?\.?$/i, "")
+            .trim();
           if (!label || !value) continue;
 
-          const key = findProfileKeyFromLabel(label) ?? `custom.${label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`;
+          const key = normalizeCanonicalProfileKey(label) ?? findProfileKeyFromLabel(label) ?? `custom.${label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`;
           
           const normalizedLabel = label.toLowerCase();
           let sensitivity: "secret" | "restricted" | "normal" = "normal";
@@ -729,6 +735,13 @@ function inferToastTone(message: string): OptionsToastMessage["tone"] {
   return /\b(could not|failed|error|incorrect|nothing to|enter|paste|required|unavailable)\b/i.test(message)
     ? "error"
     : "default";
+}
+
+function normalizeCanonicalProfileKey(value: string): string | undefined {
+  const normalized = value.trim().toLowerCase();
+  return /^(identity|contact|address|work|company|custom)\.[a-z0-9_]+$/.test(normalized)
+    ? normalized
+    : undefined;
 }
 
 async function deleteCloudProfileAfterLocalChange(profileId: string, sessionToken?: string): Promise<void> {
