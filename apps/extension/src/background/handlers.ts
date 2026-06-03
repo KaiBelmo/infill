@@ -1,4 +1,5 @@
 import { onMessage } from "webext-bridge/background";
+import { messageFromUnknownError } from "./cloud-api";
 import {
   checkApiHealth,
   checkLocalOllama,
@@ -170,7 +171,18 @@ onMessage("check-local-ollama", async ({ data }) => {
 });
 
 onMessage("create-billing-checkout", async () => {
-  return await createBillingCheckout();
+  try {
+    const result = await createBillingCheckout();
+    return {
+      ok: true,
+      ...result
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: messageFromUnknownError(error, "Unable to create a billing checkout.")
+    };
+  }
 });
 
 onMessage("list-devices", async () => {
