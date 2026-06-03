@@ -36,7 +36,9 @@ type CloudConfigInput = {
 
 type ApiHealthResult = { ok: boolean; name?: string; version?: string };
 type OllamaHealthResult = { baseUrl: string; modelCount: number; models: string[]; ok: boolean; selectedModel?: string; version?: string };
-type BillingCheckoutResult = { checkoutUrl: string; billingMode: string };
+type BillingCheckoutResult =
+  | { ok: true; checkoutUrl: string; billingMode: string }
+  | { ok: false; message: string };
 type ListDevicesResult = { devices: DeviceInfo[] };
 
 type ScanResponse = { forms: import("@infill/shared").ExtractedForm[] };
