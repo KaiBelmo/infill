@@ -204,6 +204,11 @@ export const useCloudClientStore = create<CloudClientState & CloudClientActions>
   async openCheckout() {
     try {
       const result = await createBillingCheckout();
+      if (!result.ok) {
+        const msg = normalizeCloudMessage(result.message);
+        set({ cloudMessage: msg });
+        return msg;
+      }
       if (result.checkoutUrl) {
         window.open(result.checkoutUrl, "_blank", "noopener,noreferrer");
         return "";
