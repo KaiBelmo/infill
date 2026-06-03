@@ -92,7 +92,11 @@ export async function checkLocalOllama(input: { baseUrl: string; model?: string 
   return _send("check-local-ollama", input, "background");
 }
 
-export async function createBillingCheckout(): Promise<{ checkoutUrl: string; billingMode: string }> {
+export type BillingCheckoutResult =
+  | { ok: true; checkoutUrl: string; billingMode: string }
+  | { ok: false; message: string };
+
+export async function createBillingCheckout(): Promise<BillingCheckoutResult> {
   return _send("create-billing-checkout", null, "background");
 }
 
