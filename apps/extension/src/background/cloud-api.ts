@@ -1,4 +1,4 @@
-﻿import {
+import {
   AccountInfoSchema,
   AuthSessionEnvelopeSchema,
   CloudProfileListResponseSchema,
@@ -50,7 +50,7 @@ function createCloudApi() {
             return response;
           }
 
-          // Token may be expired — try refreshing once (coalesce concurrent refreshes)
+          // Token may be expired � try refreshing once (coalesce concurrent refreshes)
           if (!refreshPromise) {
             refreshPromise = refreshCloudSession().finally(() => { refreshPromise = null; });
           }
@@ -86,6 +86,14 @@ function createCloudApi() {
               useCloudStore.getState().clearAuth();
               errorMessage = "This cloud session was revoked. Connect Infill again to continue.";
             }
+          } else if (
+            data &&
+            typeof data === "object" &&
+            "text" in data &&
+            typeof (data as { text?: unknown }).text === "string" &&
+            (data as { text: string }).text.trim()
+          ) {
+            errorMessage = (data as { text: string }).text.trim();
           }
           console.error("[cloud-api] request failed", {
             requestId,
@@ -101,7 +109,8 @@ function createCloudApi() {
             status: error.response.status,
             apiError: extractApiError(data)
           }, error.request.headers.get("x-infill-sync-attempt-id") ?? undefined);
-          return new Error(errorMessage) as unknown as typeof error;
+          error.message = errorMessage;
+          return error;
         },
       ],
     },
@@ -324,4 +333,20 @@ export function requireApiBaseUrl(value: string): void {
   if (!value) {
     throw new Error("Set the cloud API base URL in settings before connecting.");
   }
+}
+
+export function messageFromUnknownError(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+  return fallback;
 }
