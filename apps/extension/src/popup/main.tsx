@@ -144,23 +144,6 @@ function Popup() {
               </button>
             </div>
           </div>
-        ) : !state.isSignedIn && state.localOllamaEnabled ? (
-          <div className="grid gap-3 rounded-2xl border border-[rgba(0,0,0,0.12)] bg-[var(--color-black)] px-3.5 py-3 text-white shadow-[0_16px_36px_rgba(0,0,0,0.16)]">
-            <div className="grid gap-1">
-              <h3 className="m-0 text-[11px] font-[780] uppercase tracking-[0.12em] text-white">Local AI setup</h3>
-              <p className="m-0 text-[13px] leading-5 text-white/72">
-                You are not signed in. Infill will use local Ollama for smart assist, so keep Ollama running or update AI settings.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button className="rounded-full bg-white px-3 py-2 text-[12px] font-[780] uppercase tracking-[0.12em] text-[var(--color-black)]" type="button" onClick={state.openSettings}>
-                AI settings
-              </button>
-              <button className="rounded-full border border-white/25 px-3 py-2 text-[12px] font-[780] uppercase tracking-[0.12em] text-white" type="button" onClick={state.startOAuth}>
-                Sign in
-              </button>
-            </div>
-          </div>
         ) : null}
 
         <div className="flex items-center justify-between gap-3 rounded-[20px] border border-[var(--color-line)] bg-[var(--color-mist)] px-4 py-3">
