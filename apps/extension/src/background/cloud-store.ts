@@ -24,7 +24,8 @@ function defaultConfig(): CloudConfig {
     ollamaBaseUrl: "http://localhost:11434/v1",
     ollamaModel: "llama3.1",
     ollamaModelOptions: [],
-    localOllamaFallbackToCloud: false
+    localOllamaFallbackToCloud: false,
+    developerModeEnabled: false
   };
 }
 
@@ -103,7 +104,8 @@ export const useCloudStore = create<CloudState & CloudStoreActions>()(
           webBaseUrl: validateCloudBaseUrl(trimBaseUrl(input.webBaseUrl ?? current.webBaseUrl), "web"),
           ollamaBaseUrl: validateOllamaBaseUrl(trimBaseUrl(input.ollamaBaseUrl ?? current.ollamaBaseUrl)),
           ollamaModel: (input.ollamaModel ?? current.ollamaModel).trim() || defaultConfig().ollamaModel,
-          ollamaModelOptions: sanitizeOllamaModelOptions(input.ollamaModelOptions ?? current.ollamaModelOptions)
+          ollamaModelOptions: sanitizeOllamaModelOptions(input.ollamaModelOptions ?? current.ollamaModelOptions),
+          developerModeEnabled: input.developerModeEnabled ?? current.developerModeEnabled
         };
         set({ config: next });
         return get().getCloudState();

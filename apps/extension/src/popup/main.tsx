@@ -332,6 +332,12 @@ function Popup() {
             {primaryActionLabel}
           </button>
 
+          {state.developerModeEnabled ? (
+            <button className={`${secondaryButtonClassMd} border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-[var(--color-danger)] hover:text-white`} type="button" onClick={state.qaDummyFill}>
+              QA Dummy Fill (Alt+Shift+Q)
+            </button>
+          ) : null}
+
           <div className="grid gap-2 text-[12px] font-semibold text-[var(--color-ink-soft)]">
             <button className={secondaryButtonClassMd} type="button" onClick={state.openSettings}>
               Add facts

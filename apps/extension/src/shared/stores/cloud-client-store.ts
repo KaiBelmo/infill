@@ -28,6 +28,7 @@ type CloudClientActions = {
   startOAuth: () => Promise<void>;
   openBilling: () => boolean;
   toggleCloudAssist: (enabled: boolean) => Promise<string>;
+  toggleDeveloperMode: (enabled: boolean) => Promise<string>;
   saveLocalOllamaConfig: (input: {
     localOllamaEnabled: boolean;
     ollamaBaseUrl: string;
@@ -106,6 +107,20 @@ export const useCloudClientStore = create<CloudClientState & CloudClientActions>
       return msg;
     } catch (error) {
       const msg = normalizeCloudMessage(error instanceof Error ? error.message : "Unable to update cloud assist.");
+      set({ cloudMessage: msg });
+      return msg;
+    }
+  },
+
+  async toggleDeveloperMode(enabled) {
+    try {
+      const next = await saveCloudConfig({ developerModeEnabled: enabled });
+      set(deriveCloudFlags(next));
+      const msg = enabled ? "Developer mode enabled." : "Developer mode disabled.";
+      set({ cloudMessage: msg });
+      return msg;
+    } catch (error) {
+      const msg = normalizeCloudMessage(error instanceof Error ? error.message : "Unable to update developer mode.");
       set({ cloudMessage: msg });
       return msg;
     }

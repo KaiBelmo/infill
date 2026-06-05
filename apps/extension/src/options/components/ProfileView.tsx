@@ -48,6 +48,7 @@ type ProfileViewProps = {
   unlockEncryptedSync: (passphrase: string) => Promise<void>;
   lockEncryptedSync: () => Promise<void>;
   toggleCloudAssist: (enabled: boolean) => Promise<string | void>;
+  toggleDeveloperMode: (enabled: boolean) => Promise<string | void>;
   saveLocalOllamaConfig: (input: {
     localOllamaEnabled: boolean;
     ollamaBaseUrl: string;
@@ -109,6 +110,7 @@ function ProfileViewComponent(props: ProfileViewProps) {
     unlockEncryptedSync,
     lockEncryptedSync,
     toggleCloudAssist,
+    toggleDeveloperMode,
     saveLocalOllamaConfig,
     detectLocalOllamaModels,
     refreshSessionState,
@@ -241,6 +243,12 @@ function ProfileViewComponent(props: ProfileViewProps) {
     const message = await toggleCloudAssist(!cloudAssistEnabled);
     if (message) setStatus(message);
   }, [cloudAssistEnabled, setStatus, toggleCloudAssist]);
+
+  const toggleDeveloperModeAndReport = useCallback(async () => {
+    const isCurrentlyEnabled = cloudConfig?.developerModeEnabled ?? false;
+    const message = await toggleDeveloperMode(!isCurrentlyEnabled);
+    if (message) setStatus(message);
+  }, [cloudConfig?.developerModeEnabled, setStatus, toggleDeveloperMode]);
 
   const openCheckoutAndReport = useCallback(async () => {
     const message = await openCheckout();
@@ -641,9 +649,16 @@ function ProfileViewComponent(props: ProfileViewProps) {
                 <div className="grid gap-4">
                   <div>
                     <span className={sectionHeadingLabelClass}>Advanced</span>
-                    <h3 className={`${sectionHeadingTitleClass} m-0 mt-1`}>Session</h3>
+                    <h3 className={`${sectionHeadingTitleClass} m-0 mt-1`}>Settings</h3>
                   </div>
-                  <button className={secondaryButtonClassMd} type="button" onClick={refreshSessionAndReport} disabled={!cloudState?.auth?.refreshToken}>Refresh session</button>
+                  <label className="flex items-start gap-3 text-sm leading-6 text-[var(--color-ink-soft)]">
+                    <input className="mt-1" type="checkbox" checked={cloudConfig?.developerModeEnabled ?? false} onChange={toggleDeveloperModeAndReport} />
+                    <span>Developer Mode (Enables QA Dummy Fill)</span>
+                  </label>
+                  <div className={dividerClass}>
+                    <h4 className="m-0 mb-3 text-sm font-semibold text-[var(--color-ink)]">Session</h4>
+                    <button className={secondaryButtonClassMd} type="button" onClick={refreshSessionAndReport} disabled={!cloudState?.auth?.refreshToken}>Refresh session</button>
+                  </div>
                   <div className={dividerClass}>
                     <h4 className="m-0 mb-3 text-sm font-semibold text-[var(--color-danger)]">Danger zone</h4>
                     <button className={dangerButtonClass} type="button" onClick={(event) => confirmFor("disconnect", event.currentTarget)}>Disconnect</button>
