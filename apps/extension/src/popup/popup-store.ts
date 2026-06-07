@@ -25,6 +25,7 @@ type PopupActions = {
   openSettings: () => void;
   startOAuth: () => Promise<void>;
   openBilling: () => void;
+  qaDummyFill: () => Promise<void>;
 };
 
 export const usePopupStore = create<PopupState & PopupActions>()((set, get) => ({
@@ -110,6 +111,16 @@ export const usePopupStore = create<PopupState & PopupActions>()((set, get) => (
   openBilling() {
     if (!useCloudClientStore.getState().openBilling()) {
       chrome.runtime.openOptionsPage();
+    }
+  },
+
+  async qaDummyFill() {
+    const tab = await getActiveTab();
+    if (!tab?.id || !tab.url) return;
+    try {
+      await sendMessage("qa-dummy-fill", { tabId: tab.id, tabUrl: tab.url }, "background");
+    } catch {
+      // Ignore
     }
   },
 }));

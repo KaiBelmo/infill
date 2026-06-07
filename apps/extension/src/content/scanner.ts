@@ -44,6 +44,7 @@ async function scanOnce(): Promise<{ forms: ExtractedForm[] }> {
       formId: group.formId,
       urlOrigin: window.location.origin,
       urlPathHash,
+      pageLanguage: document.documentElement.lang || navigator.language || undefined,
       pageTitle: trimText(document.title, 120),
       formTitle: group.title,
       fields: visibleControls.map(({ control, index }) => extractField(control, index, group.formId, group.controls)),

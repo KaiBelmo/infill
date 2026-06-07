@@ -17,7 +17,7 @@ import {
 import { startAuthFlow } from "./auth";
 import { applyProfileSyncDecision, enableEncryptedProfileSync, prepareProfileSyncAfterAuth, resolveProfileSyncConflict, syncEncryptedProfilesIfUnlocked, unlockEncryptedProfileSync } from "./profile-sync";
 import { LOCAL_PROFILE_STATE_KEY, persistProfileStoreNow, useProfileStore } from "./profile-store";
-import { scanTab, getScanState } from "./scan";
+import { scanTab, getScanState, qaDummyFillTab } from "./scan";
 import { useScanStore } from "./scan-store";
 import { useSyncEncryptionStore } from "./sync-encryption-store";
 import { clearPrivateSyncDebug, getPrivateSyncDebug } from "./private-sync-debug";
@@ -197,6 +197,12 @@ onMessage("scan-tab", async ({ data }) => {
 
 onMessage("get-scan-state", async () => {
   return await getScanState();
+});
+
+onMessage("qa-dummy-fill", async ({ data }) => {
+  const { tabId, tabUrl } = data as { tabId: number; tabUrl: string };
+  await qaDummyFillTab(tabId, tabUrl);
+  return null;
 });
 
 onMessage("debug-profile-facts", () => {

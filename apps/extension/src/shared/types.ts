@@ -12,6 +12,7 @@ export type CloudConfig = {
   ollamaModel: string;
   ollamaModelOptions: string[];
   localOllamaFallbackToCloud: boolean;
+  developerModeEnabled?: boolean;
 };
 
 export type CloudAuthState = {

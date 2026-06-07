@@ -1,4 +1,4 @@
-import { mapFieldsToProfile, scoreFieldMatch } from "@infill/form-brain";
+import { mapFieldsToProfile, scoreFieldMatch, generateDummyDataForField } from "@infill/form-brain";
 import type { CloudAssistRequest, ExtractedForm, FieldMapping, ProfileFact, Sensitivity } from "@infill/shared";
 import { toPublicExtensionState, useProfileStore } from "./profile-store";
 import { useScanStore } from "./scan-store";
@@ -296,7 +296,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
       ? "Review fill"
       : "Blocked";
 
-  debugLog("[scanTab] DONE â€” finalStatus=", finalStatus, "mappings=", nextMappings.length);
+  debugLog("[scanTab] DONE — finalStatus=", finalStatus, "mappings=", nextMappings.length);
   const finalMappings = nextMappings.map(normalizeReviewMapping);
   const scannedAt = new Date().toISOString();
   const initialDebug = buildScanDebug({
@@ -581,4 +581,107 @@ function previewText(value: unknown, maxLength: number): string {
       ? JSON.stringify(value)
       : String(value ?? "");
   return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
+}
+
+export async function qaDummyFillTab(tabId: number, tabUrl: string): Promise<void> {
+  debugLog("[qaDummyFillTab] START tabId=", tabId, "url=", tabUrl);
+
+  if (isUnsupportedUrl(tabUrl)) {
+    return;
+  }
+
+  let allForms: ExtractedForm[] = [];
+
+  const loaded = await ensureContentScript(tabId);
+  if (!loaded) return;
+
+  const response = await withTimeout(sendMessage("scan", null, { context: "content-script", tabId }));
+  if (response) {
+    allForms = [...allForms, ...response.forms];
+  }
+
+  try {
+    const frameResults = await chrome.webNavigation.getAllFrames({ tabId });
+    if (frameResults) {
+      const iframeIds = frameResults
+        .filter((frame) => frame.frameId !== 0)
+        .map((frame) => frame.frameId);
+
+      for (const frameId of iframeIds) {
+        let frameResponse = await withTimeout(
+          sendMessage("scan", null, { context: "content-script", tabId, frameId })
+        );
+
+        if (!frameResponse) {
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId, frameIds: [frameId] },
+              files: getContentScriptFiles(),
+            });
+          } catch (injectErr) {
+            // ignore
+          }
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          frameResponse = await withTimeout(
+            sendMessage("scan", null, { context: "content-script", tabId, frameId })
+          );
+        }
+
+        if (frameResponse) {
+          const taggedForms = frameResponse.forms.map((form: ExtractedForm) => ({
+            ...form,
+            formId: `frame_${frameId}_${form.formId}`,
+            fields: form.fields.map((field) => ({
+              ...field,
+              frameId: String(frameId),
+            })),
+          }));
+          allForms = [...allForms, ...taggedForms];
+        }
+      }
+    }
+  } catch (scanError) {
+    debugWarn("[qaDummyFillTab] iframe scanning not available:", scanError);
+  }
+
+  if (allForms.length === 0) return;
+
+  const dummyStates = new Map<string, Record<string, string | boolean>>();
+
+  const mappings: FieldMapping[] = allForms.flatMap((form) =>
+    {
+      const language = form.pageLanguage ?? "en-US";
+      const dummyState = dummyStates.get(language) ?? {};
+      dummyStates.set(language, dummyState);
+
+      return form.fields
+        .filter((f) => f.visible && !f.disabled && !f.readonly)
+        .map((field) => ({
+          fieldId: field.fieldId,
+          profileKey: "qa.dummy",
+          value: generateDummyDataForField(field, dummyState, language),
+          valueSource: "manual" as const,
+          confidence: 1.0,
+          risk: "safe" as const,
+          preselected: true,
+          requiresExplicitApproval: false,
+          reason: "QA Dummy Fill",
+          usedFactIds: []
+        }));
+    }
+  );
+
+  const byFrame = new Map<string | undefined, FieldMapping[]>();
+  for (const mapping of mappings) {
+    const field = allForms.flatMap((form) => form.fields).find((item) => item.fieldId === mapping.fieldId);
+    const frameId = field?.frameId;
+    byFrame.set(frameId, [...(byFrame.get(frameId) ?? []), mapping]);
+  }
+
+  for (const [frameId, frameMappings] of byFrame) {
+    const destination = frameId
+      ? { context: "content-script" as const, tabId, frameId: Number(frameId) }
+      : { context: "content-script" as const, tabId };
+    await withTimeout(sendMessage("fill", { mappings: frameMappings }, destination));
+  }
 }

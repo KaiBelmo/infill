@@ -57,11 +57,13 @@ describe("shared schemas", () => {
       formId: "form_1",
       urlOrigin: "https://example.com",
       urlPathHash: "hash",
+      pageLanguage: "fr-FR",
       fields: [],
       createdAt: timestamp
     });
 
     expect(form.scanWarnings).toEqual([]);
+    expect(form.pageLanguage).toBe("fr-FR");
   });
 
   it("requires mapping confidence between zero and one", () => {

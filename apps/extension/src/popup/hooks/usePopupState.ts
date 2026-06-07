@@ -109,6 +109,8 @@ export function usePopupState() {
       ? "Basic matching only"
       : "AI setup needed";
 
+  const developerModeEnabled = Boolean(cloudState?.config.developerModeEnabled);
+
   return {
     extensionState, forms, mappings, cloudState, debug,
     error, status,
@@ -117,9 +119,11 @@ export function usePopupState() {
     hasScannedFields,
     pendingConflictCount, isSignedIn, canUseCloud,
     localOllamaEnabled, cloudAiEnabled, aiAssistConfigured,
+    developerModeEnabled,
     learnedNoticeCount, canUndoLearnedNotice: Boolean(learnedNoticeUndo), undoRecentLearnedFact,
     cloudBadge, aiBadge, billingLabel, usageText,
     changeActiveProfile: actions.changeActiveProfile, scanActiveTab: actions.scanActiveTab,
     openSettings: actions.openSettings, openBilling: actions.openBilling, startOAuth: actions.startOAuth,
+    qaDummyFill: actions.qaDummyFill,
   };
 }

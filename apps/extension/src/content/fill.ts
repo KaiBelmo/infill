@@ -1,6 +1,6 @@
 import type { ExtractedForm, FieldMapping } from "@infill/shared";
 import { locateField } from "./locator";
-import { sleep } from "./scanner/dom-utils";
+import { sleep, querySelectorAllDeep } from "./scanner/dom-utils";
 
 export type SkippedField = {
   fieldId: string;
@@ -13,11 +13,14 @@ export type FillResult = {
   skippedFields: SkippedField[];
 };
 
+type AutocompleteSelectionResult = "selected" | "unmatched" | "not-found";
+
 export async function fillApprovedFields(mappings: FieldMapping[], forms: ExtractedForm[]): Promise<FillResult> {
   const fieldById = new Map(forms.flatMap((form) => form.fields.map((field) => [field.fieldId, field])));
   const filledFieldIds: string[] = [];
   const skippedFieldIds: string[] = [];
   const skippedFields: SkippedField[] = [];
+  const isQaFill = mappings.length > 0 && mappings.every((mapping) => mapping.profileKey === "qa.dummy");
   const cursor = createFillCursor();
   console.debug("[infill fill] start", {
     mappings: mappings.length,
@@ -80,10 +83,10 @@ export async function fillApprovedFields(mappings: FieldMapping[], forms: Extrac
 
     const element = locateResult.element;
 
-    await moveCursorToElement(cursor, element);
-    focusElement(element);
+    await moveCursorToElement(cursor, element, !isQaFill);
+    focusElement(element, !isQaFill);
 
-    if (setElementValue(element, mapping.value)) {
+    if (await setElementValue(element, mapping.value, mapping.profileKey)) {
       console.log("[infill fill] filled", {
         ...toFillDebugMapping(mapping),
         elementTag: element.tagName,
@@ -91,7 +94,9 @@ export async function fillApprovedFields(mappings: FieldMapping[], forms: Extrac
       });
       filledFieldIds.push(mapping.fieldId);
       pulseElement(element);
-      await sleep(240);
+      if (!isQaFill) {
+        await sleep(240);
+      }
     } else {
       console.log("[infill fill] skipped set value failed", toFillDebugMapping(mapping));
       skippedFieldIds.push(mapping.fieldId);
@@ -99,7 +104,7 @@ export async function fillApprovedFields(mappings: FieldMapping[], forms: Extrac
     }
   }
 
-  await hideCursor(cursor);
+  await hideCursor(cursor, !isQaFill);
   console.debug("[infill fill] done", {
     filledFieldIds,
     skippedFields
@@ -120,7 +125,7 @@ function toFillDebugMapping(mapping: FieldMapping) {
   };
 }
 
-function setElementValue(element: Element, value: FieldMapping["value"]): boolean {
+async function setElementValue(element: Element, value: FieldMapping["value"], profileKey?: string): Promise<boolean> {
   if (element instanceof HTMLInputElement) {
     if (element.type === "checkbox") {
       element.checked = toBoolean(value);
@@ -139,9 +144,32 @@ function setElementValue(element: Element, value: FieldMapping["value"]): boolea
       return true;
     }
 
-    setNativeValue(element, String(value));
-    dispatchValueEvents(element);
-    return element.value === String(value);
+    const nextValue = String(value);
+    const strongAutocompleteSignal = hasStrongAutocompleteSignal(element);
+    const autocomplete = strongAutocompleteSignal || isLikelyAutocompleteInput(element, profileKey);
+    const visibleElementsBeforeInput = autocomplete ? new Set(findVisibleElements()) : undefined;
+
+    setNativeValue(element, nextValue);
+    dispatchTextInputEvents(element, nextValue);
+    dispatchCustomInputChange(element, nextValue);
+
+    if (autocomplete) {
+      const result = await selectAutocompleteSuggestion(
+        element,
+        nextValue,
+        visibleElementsBeforeInput,
+        strongAutocompleteSignal ? 1500 : 250
+      );
+      if (result === "unmatched") {
+        console.debug("[infill fill] autocomplete menu had no matching option", {
+          field: element.name || element.id || "unnamed",
+          value: nextValue
+        });
+      }
+    }
+
+    finalizeTextInput(element);
+    return element.value === nextValue || autocomplete;
   }
 
   if (element instanceof HTMLTextAreaElement) {
@@ -194,12 +222,49 @@ function dispatchValueEvents(element: HTMLElement): void {
   element.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
 }
 
-function focusElement(element: Element): void {
+function dispatchTextInputEvents(element: HTMLInputElement, value: string): void {
+  element.dispatchEvent(new FocusEvent("focus", { bubbles: false }));
+  element.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+  element.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: value }));
+  element.dispatchEvent(new KeyboardEvent("keypress", { bubbles: true, cancelable: true, key: value }));
+  element.dispatchEvent(new InputEvent("beforeinput", {
+    bubbles: true,
+    cancelable: true,
+    data: value,
+    inputType: "insertReplacementText"
+  }));
+  element.dispatchEvent(new InputEvent("input", {
+    bubbles: true,
+    data: value,
+    inputType: "insertReplacementText"
+  }));
+  element.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, cancelable: true, key: value }));
+}
+
+function finalizeTextInput(element: HTMLInputElement): void {
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+  element.dispatchEvent(new FocusEvent("blur", { bubbles: false }));
+  element.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+}
+
+function dispatchCustomInputChange(element: HTMLInputElement, value: string): void {
+  const inputHost = findShadowHost(element, "spl-input");
+  if (!inputHost) return;
+
+  inputHost.dispatchEvent(new CustomEvent("spl-change", {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    detail: { value }
+  }));
+}
+
+function focusElement(element: Element, animate = true): void {
   if (!(element instanceof HTMLElement)) {
     return;
   }
 
-  element.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  element.scrollIntoView({ block: "center", inline: "nearest", behavior: animate ? "smooth" : "auto" });
   element.focus({ preventScroll: true });
 }
 
@@ -245,19 +310,23 @@ function createFillCursor(): HTMLElement {
   return cursor;
 }
 
-async function moveCursorToElement(cursor: HTMLElement, element: Element): Promise<void> {
+async function moveCursorToElement(cursor: HTMLElement, element: Element, animate = true): Promise<void> {
   const rect = element.getBoundingClientRect();
   const x = Math.max(12, rect.left + Math.min(rect.width * 0.18, 36));
   const y = Math.max(12, rect.top + Math.min(rect.height * 0.5, 28));
 
   cursor.style.opacity = "1";
   cursor.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(-18deg)`;
-  await sleep(460);
+  if (animate) {
+    await sleep(460);
+  }
 }
 
-async function hideCursor(cursor: HTMLElement): Promise<void> {
+async function hideCursor(cursor: HTMLElement, animate = true): Promise<void> {
   cursor.style.opacity = "0";
-  await sleep(260);
+  if (animate) {
+    await sleep(260);
+  }
 }
 
 function pulseElement(element: Element): void {
@@ -297,4 +366,427 @@ function isDarkElement(element: HTMLElement): boolean {
 
   const [, r, g, b] = match.map(Number);
   return (r * 299 + g * 587 + b * 114) / 1000 < 128;
+}
+
+function hasStrongAutocompleteSignal(element: HTMLInputElement): boolean {
+  if (element.classList.contains("pac-target-input")) return true;
+  if (element.getAttribute("aria-autocomplete")) return true;
+  if (element.getAttribute("aria-controls") || element.getAttribute("aria-owns")) return true;
+  if (element.getAttribute("role") === "combobox") return true;
+  if (element.hasAttribute("list")) return true;
+  return false;
+}
+
+function isLikelyAutocompleteInput(element: HTMLInputElement, profileKey?: string): boolean {
+  if (profileKey) {
+    const pk = profileKey.toLowerCase();
+    if (pk.includes("city") || pk.includes("street") || pk.includes("address") || pk.includes("country") || pk.includes("region") || pk.includes("state")) {
+      return true;
+    }
+  }
+
+  const name = (element.name || "").toLowerCase();
+  const id = (element.id || "").toLowerCase();
+  const placeholder = (element.placeholder || "").toLowerCase();
+  const className = (element.className || "").toLowerCase();
+  const autocomplete = (element.getAttribute("autocomplete") || "").toLowerCase();
+
+  const isSearchOrAddress = name.includes("city") || name.includes("address") || name.includes("location") || name.includes("town") || name.includes("search") || name.includes("country") || name.includes("state") ||
+                            id.includes("city") || id.includes("address") || id.includes("location") || id.includes("town") || id.includes("search") || id.includes("country") || id.includes("state") ||
+                            placeholder.includes("city") || placeholder.includes("address") || placeholder.includes("location") || placeholder.includes("town") || placeholder.includes("search") || placeholder.includes("country") || placeholder.includes("state") ||
+                            className.includes("autocomplete") || className.includes("places") || className.includes("geocoder") || className.includes("search") ||
+                            autocomplete.includes("address") || autocomplete.includes("city") || autocomplete.includes("country") || autocomplete.includes("state");
+
+  return isSearchOrAddress;
+}
+
+const dropdownContainerSelector = [
+  "[role='listbox']",
+  "[role='menu']",
+  "spl-autocomplete",
+  "spl-dropdown",
+  ".pac-container",
+  ".sr-location-autocomplete-dropdown",
+  ".autocomplete-results",
+  ".autocomplete-suggestions",
+  ".suggestions",
+  ".dropdown-menu",
+  ".select__menu",
+  ".choices__list--dropdown",
+  "[class*='listbox']",
+  "[class*='suggestion']",
+  "[class*='popover']"
+].join(",");
+
+const optionSelector = [
+  "spl-select-option",
+  "[role='option']",
+  "[role='menuitem']",
+  "[data-value]",
+  ".sr-location-autocomplete-dropdown-option",
+  ".pac-item",
+  ".ap-suggestion",
+  ".autocomplete-suggestion",
+  ".suggestion-item",
+  ".react-select__option",
+  ".select__option",
+  ".choices__item--choice",
+  "li"
+].join(",");
+
+function findDropdownContainers(input: HTMLInputElement): HTMLElement[] {
+  const associated = getAssociatedDropdownContainers(input);
+  const discovered = querySelectorAllDeep(dropdownContainerSelector, document) as HTMLElement[];
+  const unique = Array.from(new Set([...associated, ...discovered])).filter(isVisibleInteractiveElement);
+
+  return unique.sort((a, b) => {
+    const associatedDifference = Number(!associated.includes(a)) - Number(!associated.includes(b));
+    return associatedDifference || distanceFromInput(a, input) - distanceFromInput(b, input);
+  });
+}
+
+function getAssociatedDropdownContainers(input: HTMLInputElement): HTMLElement[] {
+  const ids = `${input.getAttribute("aria-controls") ?? ""} ${input.getAttribute("aria-owns") ?? ""}`
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return ids.flatMap((id) =>
+    querySelectorAllDeep(`#${CSS.escape(id)}`, document).filter((element): element is HTMLElement => element instanceof HTMLElement)
+  );
+}
+
+function findVisibleOptionElements(): HTMLElement[] {
+  return (querySelectorAllDeep(optionSelector, document) as HTMLElement[]).filter(isSelectableOption);
+}
+
+function findVisibleElements(): HTMLElement[] {
+  return (querySelectorAllDeep("*", document) as HTMLElement[]).filter(isVisibleInteractiveElement);
+}
+
+function findOptionCandidates(
+  input: HTMLInputElement,
+  containers: HTMLElement[],
+  visibleBeforeInput: Set<HTMLElement> | undefined,
+  targetText: string
+): HTMLElement[] {
+  const associated = new Set(getAssociatedDropdownContainers(input));
+  const candidates = new Set<HTMLElement>();
+
+  for (const container of containers) {
+    for (const option of querySelectorAllDeep(optionSelector, container) as HTMLElement[]) {
+      if (isSelectableOption(option)) {
+        candidates.add(option);
+      }
+    }
+  }
+
+  for (const option of findVisibleOptionElements()) {
+    const belongsToContainer = containers.some((container) => container.contains(option)) || isInsideAny(option, associated);
+    const appearedAfterInput = !visibleBeforeInput?.has(option);
+    if (belongsToContainer || (appearedAfterInput && isNearInput(option, input))) {
+      candidates.add(option);
+    }
+  }
+
+  // Some autocomplete widgets render plain div rows without roles or stable classes.
+  // Limit this fallback to newly visible, nearby elements that already text-match.
+  const target = normalizeOptionText(targetText);
+  for (const element of findVisibleElements()) {
+    if (
+      element === input ||
+      visibleBeforeInput?.has(element) ||
+      !isSelectableOption(element) ||
+      !isNearInput(element, input) ||
+      getOptionMatchRank(element, target) === 0
+    ) {
+      continue;
+    }
+
+    candidates.add(getMostSpecificMatchingDescendant(element, target));
+  }
+
+  return Array.from(candidates);
+}
+
+function getMostSpecificMatchingDescendant(element: HTMLElement, target: string): HTMLElement {
+  const descendants = (querySelectorAllDeep("*", element) as HTMLElement[])
+    .filter((descendant) => isSelectableOption(descendant) && getOptionMatchRank(descendant, target) > 0)
+    .sort((a, b) => elementArea(a) - elementArea(b));
+
+  const customOption = descendants.find(isCustomOptionElement);
+  return customOption ?? descendants[0] ?? element;
+}
+
+function findBestMatchingOption(
+  input: HTMLInputElement,
+  candidates: HTMLElement[],
+  targetText: string,
+  visibleBeforeInput?: Set<HTMLElement>
+): HTMLElement | undefined {
+  const target = normalizeOptionText(targetText);
+  if (!target) return undefined;
+
+  return candidates
+    .map((element) => ({
+      element,
+      matchRank: getOptionMatchRank(element, target),
+      wasVisible: visibleBeforeInput?.has(element) ?? false,
+      distance: distanceFromInput(element, input)
+    }))
+    .filter((candidate) => candidate.matchRank > 0)
+    .sort((a, b) =>
+      b.matchRank - a.matchRank ||
+      Number(a.wasVisible) - Number(b.wasVisible) ||
+      a.distance - b.distance
+    )[0]?.element;
+}
+
+function getOptionMatchRank(element: HTMLElement, target: string): number {
+  const values = [
+    element.textContent,
+    element.getAttribute("aria-label"),
+    element.getAttribute("title"),
+    element.getAttribute("data-value")
+  ]
+    .map((value) => normalizeOptionText(value ?? ""))
+    .filter(Boolean);
+
+  if (values.some((value) => value === target)) return 3;
+  if (values.some((value) => value.startsWith(target))) return 2;
+  if (values.some((value) => hasTokenBoundaryMatch(value, target))) return 1;
+  return 0;
+}
+
+function normalizeOptionText(value: string): string {
+  return value.toLocaleLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function hasTokenBoundaryMatch(value: string, target: string): boolean {
+  const index = value.indexOf(target);
+  if (index < 0) return false;
+
+  const before = index === 0 ? "" : value[index - 1];
+  const afterIndex = index + target.length;
+  const after = afterIndex >= value.length ? "" : value[afterIndex];
+  return (!before || /\W/.test(before)) && (!after || /\W/.test(after));
+}
+
+function isSelectableOption(element: HTMLElement): boolean {
+  if (!isVisibleInteractiveElement(element)) return false;
+  if (element.getAttribute("aria-disabled") === "true") return false;
+  if ("disabled" in element && element.disabled === true) return false;
+  return true;
+}
+
+function isCustomOptionElement(element: HTMLElement): boolean {
+  return element.matches("spl-select-option, .sr-location-autocomplete-dropdown-option");
+}
+
+function isVisibleInteractiveElement(element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+  return rect.width > 0 &&
+    rect.height > 0 &&
+    style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    style.opacity !== "0";
+}
+
+function isNearInput(element: HTMLElement, input: HTMLInputElement): boolean {
+  const inputRect = input.getBoundingClientRect();
+  const rect = element.getBoundingClientRect();
+  const horizontalOverlap = rect.left < inputRect.right + 160 && rect.right > inputRect.left - 160;
+  const verticalDistance = Math.min(Math.abs(rect.top - inputRect.bottom), Math.abs(inputRect.top - rect.bottom));
+  return horizontalOverlap && verticalDistance <= 240;
+}
+
+function isInsideAny(element: HTMLElement, containers: Set<HTMLElement>): boolean {
+  return Array.from(containers).some((container) => container.contains(element));
+}
+
+function distanceFromInput(element: HTMLElement, input: HTMLInputElement): number {
+  const inputRect = input.getBoundingClientRect();
+  const rect = element.getBoundingClientRect();
+  const inputX = inputRect.left + inputRect.width / 2;
+  const inputY = inputRect.bottom;
+  const elementX = rect.left + rect.width / 2;
+  const elementY = rect.top;
+  return Math.hypot(elementX - inputX, elementY - inputY);
+}
+
+function elementArea(element: HTMLElement): number {
+  const rect = element.getBoundingClientRect();
+  return rect.width * rect.height;
+}
+
+function dispatchMouseClick(element: HTMLElement): void {
+  element.scrollIntoView({ block: "nearest", inline: "nearest" });
+  const rect = element.getBoundingClientRect();
+  const clientX = rect.left + rect.width / 2;
+  const clientY = rect.top + rect.height / 2;
+  const commonInit: MouseEventInit = {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    clientX,
+    clientY,
+    button: 0,
+    detail: 1,
+    view: element.ownerDocument.defaultView
+  };
+  const downInit: MouseEventInit = { ...commonInit, buttons: 1 };
+  const upInit: MouseEventInit = { ...commonInit, buttons: 0 };
+  const pointerDownInit: PointerEventInit = { ...downInit, pointerType: "mouse", isPrimary: true, pointerId: 1 };
+  const pointerUpInit: PointerEventInit = { ...upInit, pointerType: "mouse", isPrimary: true, pointerId: 1 };
+  const PointerEventConstructor = element.ownerDocument.defaultView?.PointerEvent;
+
+  if (PointerEventConstructor) {
+    element.dispatchEvent(new PointerEventConstructor("pointerover", pointerUpInit));
+    element.dispatchEvent(new PointerEventConstructor("pointermove", pointerUpInit));
+    element.dispatchEvent(new PointerEventConstructor("pointerdown", pointerDownInit));
+  }
+  element.dispatchEvent(new MouseEvent("mouseover", upInit));
+  element.dispatchEvent(new MouseEvent("mousemove", upInit));
+  element.dispatchEvent(new MouseEvent("mousedown", downInit));
+  if (PointerEventConstructor) {
+    element.dispatchEvent(new PointerEventConstructor("pointerup", pointerUpInit));
+  }
+  element.dispatchEvent(new MouseEvent("mouseup", upInit));
+  element.dispatchEvent(new MouseEvent("click", upInit));
+}
+
+function selectThroughAutocompleteApi(suggestion: HTMLElement, candidates: HTMLElement[]): boolean {
+  const optionHost = suggestion.matches("spl-select-option")
+    ? suggestion
+    : suggestion.closest<HTMLElement>("spl-select-option");
+  const autocomplete = findShadowHost(optionHost ?? suggestion, "spl-autocomplete") as SmartRecruitersAutocomplete | null;
+
+  if (!autocomplete || typeof autocomplete.selectOptionByIndex !== "function" || !optionHost) {
+    return false;
+  }
+
+  const optionHosts = candidates
+    .map((candidate) => candidate.matches("spl-select-option")
+      ? candidate
+      : candidate.closest<HTMLElement>("spl-select-option"))
+    .filter((candidate): candidate is HTMLElement => candidate !== null);
+  const uniqueOptionHosts = Array.from(new Set(optionHosts));
+  const index = uniqueOptionHosts.indexOf(optionHost);
+  if (index < 0) return false;
+
+  autocomplete.selectOptionByIndex(index);
+  return true;
+}
+
+function findShadowHost(element: Element, selector: string): Element | null {
+  let current: Node | null = element;
+
+  while (current) {
+    if (current instanceof Element && current.matches(selector)) {
+      return current;
+    }
+
+    const root = current.getRootNode();
+    current = root instanceof ShadowRoot ? root.host : current.parentNode;
+  }
+
+  return null;
+}
+
+type SmartRecruitersAutocomplete = HTMLElement & {
+  selectOptionByIndex?: (index: number) => void;
+};
+
+function dispatchKeyboardSelection(
+  input: HTMLInputElement,
+  suggestion: HTMLElement,
+  candidates: HTMLElement[]
+): void {
+  const orderedCandidates = candidates
+    .filter(isSelectableOption)
+    .sort((a, b) => {
+      const rectA = a.getBoundingClientRect();
+      const rectB = b.getBoundingClientRect();
+      return rectA.top - rectB.top || rectA.left - rectB.left;
+    });
+  const suggestionIndex = Math.max(0, orderedCandidates.indexOf(suggestion));
+
+  input.focus({ preventScroll: true });
+  for (let index = 0; index <= suggestionIndex; index += 1) {
+    dispatchKeyboardKey(input, "ArrowDown");
+  }
+  dispatchKeyboardKey(input, "Enter");
+}
+
+function dispatchKeyboardKey(element: HTMLElement, key: string): void {
+  const code = key === "ArrowDown" ? "ArrowDown" : "Enter";
+  const keyCode = key === "ArrowDown" ? 40 : 13;
+  const init: KeyboardEventInit = {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    key,
+    code,
+    keyCode,
+    which: keyCode
+  };
+
+  element.dispatchEvent(new KeyboardEvent("keydown", init));
+  element.dispatchEvent(new KeyboardEvent("keyup", init));
+}
+
+function selectionAppearsCommitted(
+  input: HTMLInputElement,
+  suggestion: HTMLElement,
+  containers: HTMLElement[]
+): boolean {
+  if (suggestion.getAttribute("aria-selected") === "true") return true;
+  if (input.getAttribute("aria-expanded") === "false") return true;
+  if (!suggestion.isConnected || !isVisibleInteractiveElement(suggestion)) return true;
+  return containers.length > 0 && containers.every((container) =>
+    !container.isConnected || !isVisibleInteractiveElement(container)
+  );
+}
+
+async function selectAutocompleteSuggestion(
+  input: HTMLInputElement,
+  targetValue: string,
+  visibleBeforeInput?: Set<HTMLElement>,
+  timeoutMs = 1500
+): Promise<AutocompleteSelectionResult> {
+  const startedAt = Date.now();
+  let menuFound = false;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const containers = findDropdownContainers(input);
+    const candidates = findOptionCandidates(input, containers, visibleBeforeInput, targetValue);
+    menuFound ||= containers.length > 0 || candidates.length > 0;
+
+    const suggestion = findBestMatchingOption(input, candidates, targetValue, visibleBeforeInput);
+    if (suggestion) {
+      console.debug("[infill fill] clicking matched autocomplete suggestion", {
+        tagName: suggestion.tagName,
+        role: suggestion.getAttribute("role"),
+        className: suggestion.className,
+        text: suggestion.textContent?.trim().slice(0, 120)
+      });
+      const selectedThroughApi = selectThroughAutocompleteApi(suggestion, candidates);
+      if (!selectedThroughApi) {
+        dispatchMouseClick(suggestion);
+      }
+      await sleep(180);
+
+      if (!selectionAppearsCommitted(input, suggestion, containers)) {
+        console.debug("[infill fill] click did not close autocomplete; trying keyboard selection");
+        dispatchKeyboardSelection(input, suggestion, candidates);
+        await sleep(180);
+      }
+
+      return "selected";
+    }
+
+    await sleep(75);
+  }
+
+  return menuFound ? "unmatched" : "not-found";
 }

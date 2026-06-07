@@ -9,7 +9,7 @@ export default defineManifest({
   permissions: ["activeTab", "scripting", "storage", "tabs", "webNavigation"],
   host_permissions: ["file:///*", "https://*/*", "http://*/*"],
   background: {
-    service_worker: "src/background/serviceWorker.ts",
+    scripts: ["src/background/serviceWorker.ts"],
     type: "module"
   },
   icons: {
@@ -33,5 +33,14 @@ export default defineManifest({
       run_at: "document_idle"
     }
   ],
+  commands: {
+    "qa-dummy-fill": {
+      suggested_key: {
+        default: "Alt+Shift+Q",
+        mac: "Alt+Shift+Q"
+      },
+      description: "Instantly fill the current form with dummy QA data (if Developer Mode is enabled)"
+    }
+  },
   options_page: "src/options/index.html"
 });
