@@ -644,17 +644,21 @@ function ProfileViewComponent(props: ProfileViewProps) {
                   ) : null}
                 </div>
               </section>
+            </>
+          ) : null}
 
-              <section className={quietCardClass}>
-                <div className="grid gap-4">
-                  <div>
-                    <span className={sectionHeadingLabelClass}>Advanced</span>
-                    <h3 className={`${sectionHeadingTitleClass} m-0 mt-1`}>Settings</h3>
-                  </div>
-                  <label className="flex items-start gap-3 text-sm leading-6 text-[var(--color-ink-soft)]">
-                    <input className="mt-1" type="checkbox" checked={cloudConfig?.developerModeEnabled ?? false} onChange={toggleDeveloperModeAndReport} />
-                    <span>Developer Mode (Enables QA Dummy Fill)</span>
-                  </label>
+          <section className={quietCardClass}>
+            <div className="grid gap-4">
+              <div>
+                <span className={sectionHeadingLabelClass}>Advanced</span>
+                <h3 className={`${sectionHeadingTitleClass} m-0 mt-1`}>Settings</h3>
+              </div>
+              <label className="flex items-start gap-3 text-sm leading-6 text-[var(--color-ink-soft)]">
+                <input className="mt-1" type="checkbox" checked={cloudConfig?.developerModeEnabled ?? false} onChange={toggleDeveloperModeAndReport} />
+                <span>Developer Mode (Enables QA Dummy Fill)</span>
+              </label>
+              {isSignedIn ? (
+                <>
                   <div className={dividerClass}>
                     <h4 className="m-0 mb-3 text-sm font-semibold text-[var(--color-ink)]">Session</h4>
                     <button className={secondaryButtonClassMd} type="button" onClick={refreshSessionAndReport} disabled={!cloudState?.auth?.refreshToken}>Refresh session</button>
@@ -663,11 +667,11 @@ function ProfileViewComponent(props: ProfileViewProps) {
                     <h4 className="m-0 mb-3 text-sm font-semibold text-[var(--color-danger)]">Danger zone</h4>
                     <button className={dangerButtonClass} type="button" onClick={(event) => confirmFor("disconnect", event.currentTarget)}>Disconnect</button>
                   </div>
-                  <p className="m-0 text-[11px] font-[760] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">Extension v{extensionVersion}</p>
-                </div>
-              </section>
-            </>
-          ) : null}
+                </>
+              ) : null}
+              <p className="m-0 text-[11px] font-[760] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">Extension v{extensionVersion}</p>
+            </div>
+          </section>
         </section>
       ) : null}
 

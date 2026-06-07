@@ -9,7 +9,7 @@ export default defineManifest({
   permissions: ["activeTab", "scripting", "storage", "tabs", "webNavigation"],
   host_permissions: ["file:///*", "https://*/*", "http://*/*"],
   background: {
-    service_worker: "src/background/serviceWorker.ts",
+    scripts: ["src/background/serviceWorker.ts"],
     type: "module"
   },
   icons: {

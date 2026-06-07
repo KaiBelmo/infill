@@ -648,7 +648,7 @@ export async function qaDummyFillTab(tabId: number, tabUrl: string): Promise<voi
 
   const mappings: FieldMapping[] = allForms.flatMap((form) =>
     form.fields
-      .filter((f) => f.isVisible && !f.disabled && !f.readOnly)
+      .filter((f) => f.visible && !f.disabled && !f.readonly)
       .map((field) => ({
         fieldId: field.fieldId,
         profileKey: "qa.dummy",
