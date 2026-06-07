@@ -646,13 +646,15 @@ export async function qaDummyFillTab(tabId: number, tabUrl: string): Promise<voi
 
   if (allForms.length === 0) return;
 
+  const dummyState: Record<string, string | boolean> = {};
+
   const mappings: FieldMapping[] = allForms.flatMap((form) =>
     form.fields
       .filter((f) => f.visible && !f.disabled && !f.readonly)
       .map((field) => ({
         fieldId: field.fieldId,
         profileKey: "qa.dummy",
-        value: generateDummyDataForField(field),
+        value: generateDummyDataForField(field, dummyState),
         valueSource: "manual",
         confidence: 1.0,
         risk: "safe",

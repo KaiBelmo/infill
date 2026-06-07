@@ -1,6 +1,6 @@
 import type { ExtractedForm, FieldMapping } from "@infill/shared";
 import { locateField } from "./locator";
-import { sleep } from "./scanner/dom-utils";
+import { sleep, querySelectorAllDeep } from "./scanner/dom-utils";
 
 export type SkippedField = {
   fieldId: string;
@@ -83,19 +83,31 @@ export async function fillApprovedFields(mappings: FieldMapping[], forms: Extrac
     await moveCursorToElement(cursor, element);
     focusElement(element);
 
-    if (setElementValue(element, mapping.value)) {
-      console.log("[infill fill] filled", {
-        ...toFillDebugMapping(mapping),
-        elementTag: element.tagName,
-        elementType: element instanceof HTMLInputElement ? element.type : undefined
-      });
-      filledFieldIds.push(mapping.fieldId);
-      pulseElement(element);
-      await sleep(240);
-    } else {
-      console.log("[infill fill] skipped set value failed", toFillDebugMapping(mapping));
-      skippedFieldIds.push(mapping.fieldId);
-      skippedFields.push({ fieldId: mapping.fieldId, reason: "Could not set value on element" });
+    try {
+      if (await setElementValue(element, mapping.value, mapping.profileKey)) {
+        console.log("[infill fill] filled", {
+          ...toFillDebugMapping(mapping),
+          elementTag: element.tagName,
+          elementType: element instanceof HTMLInputElement ? element.type : undefined
+        });
+        filledFieldIds.push(mapping.fieldId);
+        pulseElement(element);
+        await sleep(240);
+      } else {
+        console.log("[infill fill] skipped set value failed", toFillDebugMapping(mapping));
+        skippedFieldIds.push(mapping.fieldId);
+        skippedFields.push({ fieldId: mapping.fieldId, reason: "Could not set value on element" });
+      }
+    } catch (err: any) {
+      if (err instanceof Error && err.message.startsWith("HALT_FILL:")) {
+        const msg = err.message.replace("HALT_FILL: ", "");
+        alert(msg);
+        console.warn("[infill fill] Halted:", msg);
+        skippedFieldIds.push(mapping.fieldId);
+        skippedFields.push({ fieldId: mapping.fieldId, reason: `Halted: ${msg}` });
+        break;
+      }
+      throw err;
     }
   }
 
@@ -120,7 +132,7 @@ function toFillDebugMapping(mapping: FieldMapping) {
   };
 }
 
-function setElementValue(element: Element, value: FieldMapping["value"]): boolean {
+async function setElementValue(element: Element, value: FieldMapping["value"], profileKey?: string): Promise<boolean> {
   if (element instanceof HTMLInputElement) {
     if (element.type === "checkbox") {
       element.checked = toBoolean(value);
@@ -141,6 +153,14 @@ function setElementValue(element: Element, value: FieldMapping["value"]): boolea
 
     setNativeValue(element, String(value));
     dispatchValueEvents(element);
+
+    if (isAutocompleteInput(element, profileKey)) {
+      const selected = await selectFirstAutocompleteSuggestion(element, String(value));
+      if (selected) {
+        return true;
+      }
+    }
+
     return element.value === String(value);
   }
 
@@ -297,4 +317,191 @@ function isDarkElement(element: HTMLElement): boolean {
 
   const [, r, g, b] = match.map(Number);
   return (r * 299 + g * 587 + b * 114) / 1000 < 128;
+}
+
+function isAutocompleteInput(element: HTMLInputElement, profileKey?: string): boolean {
+  if (element.classList.contains("pac-target-input")) return true;
+
+  if (profileKey) {
+    const pk = profileKey.toLowerCase();
+    if (pk.includes("city") || pk.includes("street") || pk.includes("address") || pk.includes("country") || pk.includes("region") || pk.includes("state")) {
+      return true;
+    }
+  }
+
+  const name = (element.name || "").toLowerCase();
+  const id = (element.id || "").toLowerCase();
+  const placeholder = (element.placeholder || "").toLowerCase();
+  const className = (element.className || "").toLowerCase();
+  const autocomplete = (element.getAttribute("autocomplete") || "").toLowerCase();
+
+  const isSearchOrAddress = name.includes("city") || name.includes("address") || name.includes("location") || name.includes("town") || name.includes("search") || name.includes("country") || name.includes("state") ||
+                            id.includes("city") || id.includes("address") || id.includes("location") || id.includes("town") || id.includes("search") || id.includes("country") || id.includes("state") ||
+                            placeholder.includes("city") || placeholder.includes("address") || placeholder.includes("location") || placeholder.includes("town") || placeholder.includes("search") || placeholder.includes("country") || placeholder.includes("state") ||
+                            className.includes("autocomplete") || className.includes("places") || className.includes("geocoder") || className.includes("search") ||
+                            autocomplete.includes("address") || autocomplete.includes("city") || autocomplete.includes("country") || autocomplete.includes("state");
+
+  return isSearchOrAddress;
+}
+
+/**
+ * Finds all visible candidate dropdown containers positioned near the given input element.
+ * Traverses deep shadow roots and sorts candidates by vertical proximity to the input's bottom.
+ */
+function findDropdownContainersAroundInput(input: HTMLInputElement): HTMLElement[] {
+  const inputRect = input.getBoundingClientRect();
+  const candidates = querySelectorAllDeep("*", document) as HTMLElement[];
+  const possibleContainers: HTMLElement[] = [];
+
+  for (const el of candidates) {
+    if (el === document.body || el === document.documentElement || el === input) continue;
+    
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 30 || rect.height < 10) continue;
+
+    const style = window.getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") continue;
+
+    // Generous bounding check
+    const verticalNear = (rect.top >= inputRect.top - 20 && rect.top <= inputRect.bottom + 80) ||
+                         (rect.bottom <= inputRect.bottom + 20 && rect.bottom >= inputRect.top - 80);
+    const horizontalNear = rect.left < inputRect.right + 150 && rect.right > inputRect.left - 150;
+
+    if (verticalNear && horizontalNear) {
+      const isPositioned = style.position === "absolute" || style.position === "fixed" || style.position === "relative";
+      const isDropdownRole = el.getAttribute("role") === "listbox" || el.getAttribute("role") === "menu" || el.getAttribute("role") === "combobox";
+      const matchesCommonClass = el.className && typeof el.className === "string" && (
+        el.className.includes("dropdown") ||
+        el.className.includes("suggestion") ||
+        el.className.includes("pac-container") ||
+        el.className.includes("menu") ||
+        el.className.includes("listbox") ||
+        el.className.includes("select__menu") ||
+        el.className.includes("result") ||
+        el.className.includes("list") ||
+        el.className.includes("options") ||
+        el.className.includes("popover")
+      );
+
+      if (isPositioned || isDropdownRole || matchesCommonClass) {
+        possibleContainers.push(el);
+      }
+    }
+  }
+
+  // Sort candidates by proximity to input bottom
+  possibleContainers.sort((a, b) => {
+    const distA = Math.abs(a.getBoundingClientRect().top - inputRect.bottom);
+    const distB = Math.abs(b.getBoundingClientRect().top - inputRect.bottom);
+    return distA - distB;
+  });
+
+  return possibleContainers;
+}
+
+/**
+ * Searches inside a dropdown container (including shadow roots) for a suggestion
+ * option whose text content contains the target text case-insensitively.
+ */
+function findMatchingOption(container: HTMLElement, targetText: string): HTMLElement | undefined {
+  const normTarget = targetText.toLowerCase().trim();
+  if (!normTarget) return undefined;
+
+  const itemSelectors = [
+    "[role='option']",
+    ".pac-item",
+    ".ap-suggestion",
+    ".autocomplete-suggestion",
+    ".suggestion-item",
+    ".react-select__option",
+    ".choices__item--choice",
+    "li",
+    "div"
+  ];
+
+  for (const selector of itemSelectors) {
+    const items = querySelectorAllDeep(selector, container) as HTMLElement[];
+    const matching = items.find((item) => {
+      const rect = item.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return false;
+      const style = window.getComputedStyle(item);
+      if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+
+      const text = (item.textContent || "").toLowerCase().trim();
+      return text.includes(normTarget);
+    });
+
+    if (matching) {
+      return matching;
+    }
+  }
+
+  const allChildren = querySelectorAllDeep("*", container) as HTMLElement[];
+  const matchingChild = allChildren.find((child) => {
+    if (child.children.length > 0) return false;
+    
+    const rect = child.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return false;
+    
+    const style = window.getComputedStyle(child);
+    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+
+    const text = (child.textContent || "").toLowerCase().trim();
+    return text.includes(normTarget);
+  });
+
+  return matchingChild;
+}
+
+/**
+ * Polls and waits for a suggestion dropdown container to appear near the input element.
+ */
+async function waitForDropdownContainer(input: HTMLInputElement, timeoutMs = 1200): Promise<HTMLElement | null> {
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    const containers = findDropdownContainersAroundInput(input);
+    if (containers.length > 0) {
+      return containers[0];
+    }
+    await sleep(100);
+  }
+  return null;
+}
+
+/**
+ * Simulates a robust click sequence (pointerdown, mousedown, focus, pointerup, mouseup, click)
+ * to bypass framework limitations and ensure custom dropdown option selection registers.
+ */
+function dispatchMouseClick(element: HTMLElement): void {
+  element.scrollIntoView({ block: "nearest" });
+  element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerType: "mouse" }));
+  element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+  element.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+  element.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, cancelable: true, pointerType: "mouse" }));
+  element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+  element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  element.click();
+}
+
+/**
+ * Intercepts autocomplete inputs and waits for their dropdown menu,
+ * clicking the matched suggestion or halting the fill process if unmatched.
+ */
+async function selectFirstAutocompleteSuggestion(element: HTMLInputElement, targetValue: string): Promise<boolean> {
+  const container = await waitForDropdownContainer(element, 1200);
+
+  if (container) {
+    const suggestion = findMatchingOption(container, targetValue);
+    if (suggestion) {
+      console.debug("[infill fill] Clicking matched autocomplete suggestion:", suggestion);
+      dispatchMouseClick(suggestion);
+      await sleep(800);
+      return true;
+    } else {
+      const fieldName = element.name || element.id || "Autocomplete field";
+      throw new Error(`HALT_FILL: QA Dummy Fill halted! Autocomplete dropdown detected for field '${fieldName}', but no matching option was found for value '${targetValue}'. Please select the correct option manually.`);
+    }
+  }
+
+  return false;
 }
