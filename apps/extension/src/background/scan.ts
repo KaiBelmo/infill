@@ -646,23 +646,29 @@ export async function qaDummyFillTab(tabId: number, tabUrl: string): Promise<voi
 
   if (allForms.length === 0) return;
 
-  const dummyState: Record<string, string | boolean> = {};
+  const dummyStates = new Map<string, Record<string, string | boolean>>();
 
   const mappings: FieldMapping[] = allForms.flatMap((form) =>
-    form.fields
-      .filter((f) => f.visible && !f.disabled && !f.readonly)
-      .map((field) => ({
-        fieldId: field.fieldId,
-        profileKey: "qa.dummy",
-        value: generateDummyDataForField(field, dummyState),
-        valueSource: "manual",
-        confidence: 1.0,
-        risk: "safe",
-        preselected: true,
-        requiresExplicitApproval: false,
-        reason: "QA Dummy Fill",
-        usedFactIds: []
-      }))
+    {
+      const language = form.pageLanguage ?? "en-US";
+      const dummyState = dummyStates.get(language) ?? {};
+      dummyStates.set(language, dummyState);
+
+      return form.fields
+        .filter((f) => f.visible && !f.disabled && !f.readonly)
+        .map((field) => ({
+          fieldId: field.fieldId,
+          profileKey: "qa.dummy",
+          value: generateDummyDataForField(field, dummyState, language),
+          valueSource: "manual" as const,
+          confidence: 1.0,
+          risk: "safe" as const,
+          preselected: true,
+          requiresExplicitApproval: false,
+          reason: "QA Dummy Fill",
+          usedFactIds: []
+        }));
+    }
   );
 
   const byFrame = new Map<string | undefined, FieldMapping[]>();
@@ -678,4 +684,4 @@ export async function qaDummyFillTab(tabId: number, tabUrl: string): Promise<voi
       : { context: "content-script" as const, tabId };
     await withTimeout(sendMessage("fill", { mappings: frameMappings }, destination));
   }
-}
+}

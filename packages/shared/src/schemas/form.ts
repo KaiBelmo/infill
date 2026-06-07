@@ -54,6 +54,7 @@ export const ExtractedFormSchema = z.object({
   formId: z.string().min(1),
   urlOrigin: z.string().min(1),
   urlPathHash: z.string().min(1),
+  pageLanguage: z.string().min(2).max(35).optional(),
   pageTitle: z.string().optional(),
   formTitle: z.string().optional(),
   detectedDomain: z.string().optional(),

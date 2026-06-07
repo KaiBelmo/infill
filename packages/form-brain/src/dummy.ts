@@ -3,8 +3,8 @@ import { findProfileKey } from "./matcher";
 
 const FIRST_NAMES = ["Alex", "Jordan", "Taylor", "Casey", "Morgan", "Riley", "Sam", "Jamie", "Drew", "Avery"];
 const LAST_NAMES = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez"];
-const CITIES = ["New York", "London", "Toronto", "Sydney", "Berlin", "Tokyo", "Paris", "Austin", "Seattle", "Denver"];
 const COMPANIES = ["Acme Corp", "Globex", "Soylent Corp", "Initech", "Umbrella Corp", "Stark Industries", "Wayne Enterprises"];
+const SOCIAL_HANDLE_PREFIX = "infill";
 
 function randomChoice<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
@@ -45,7 +45,7 @@ const US_AREA_CODES = [
  * Generates a realistic North American Numbering Plan (NANP) phone number.
  * Uses a curated list of active area codes and avoids invalid exchanges (e.g. 555 and N11).
  */
-function randomPhoneNumber(): string {
+function randomUsPhoneNumber(): string {
   const areaCode = randomChoice(US_AREA_CODES);
   let exchange = "";
   while (true) {
@@ -58,7 +58,135 @@ function randomPhoneNumber(): string {
     }
   }
   const line = randomNumber(4);
-  return `${areaCode}${exchange}${line}`;
+  return `+1${areaCode}${exchange}${line}`;
+}
+
+type LocalePersona = {
+  country: string;
+  cities: string[];
+  regions: string[];
+  postalCodes: string[];
+  streets: string[];
+  phone: () => string;
+};
+
+type LocalizedDummyValueGenerator = (field: ExtractedField, persona: LocalePersona) => string;
+
+const localePersonas: Record<string, LocalePersona> = {
+  "en-US": locale("United States", ["New York", "Austin", "Seattle"], ["New York", "Texas", "Washington"], ["10001", "78701", "98101"], ["350 Fifth Avenue", "100 Congress Avenue"], randomUsPhoneNumber),
+  "en-GB": locale("United Kingdom", ["London", "Manchester", "Edinburgh"], ["England", "England", "Scotland"], ["SW1A 1AA", "M1 1AE", "EH1 1YZ"], ["10 Downing Street", "25 Deansgate"], () => "+447700900123"),
+  "fr-FR": locale("France", ["Paris", "Lyon", "Marseille"], ["Île-de-France", "Auvergne-Rhône-Alpes", "Provence-Alpes-Côte d’Azur"], ["75001", "69001", "13001"], ["10 Rue de Rivoli", "25 Rue de la République"], () => `+336${randomNumber(8)}`),
+  "fr-CA": locale("Canada", ["Montréal", "Québec", "Ottawa"], ["Québec", "Québec", "Ontario"], ["H2Y 1C6", "G1R 4P5", "K1P 1J1"], ["100 Rue Sainte-Catherine", "50 Rue Saint-Jean"], () => "+14165550123"),
+  "de-DE": locale("Germany", ["Berlin", "Munich", "Hamburg"], ["Berlin", "Bavaria", "Hamburg"], ["10115", "80331", "20095"], ["Unter den Linden 10", "Marienplatz 8"], () => `+49151${randomNumber(8)}`),
+  "es-ES": locale("Spain", ["Madrid", "Barcelona", "Valencia"], ["Community of Madrid", "Catalonia", "Valencian Community"], ["28001", "08001", "46001"], ["Calle de Alcalá 10", "Carrer de Mallorca 25"], () => `+346${randomNumber(8)}`),
+  "it-IT": locale("Italy", ["Rome", "Milan", "Turin"], ["Lazio", "Lombardy", "Piedmont"], ["00184", "20121", "10121"], ["Via Nazionale 10", "Via Roma 25"], () => `+39320${randomNumber(7)}`),
+  "pt-PT": locale("Portugal", ["Lisbon", "Porto", "Braga"], ["Lisbon", "Porto", "Braga"], ["1000-001", "4000-001", "4700-001"], ["Avenida da Liberdade 10", "Rua de Santa Catarina 25"], () => `+35191${randomNumber(7)}`),
+  "nl-NL": locale("Netherlands", ["Amsterdam", "Rotterdam", "Utrecht"], ["North Holland", "South Holland", "Utrecht"], ["1012 JS", "3011 AA", "3511 CE"], ["Damrak 10", "Coolsingel 25"], () => `+316${randomNumber(8)}`),
+  "pl-PL": locale("Poland", ["Warsaw", "Kraków", "Wrocław"], ["Masovian", "Lesser Poland", "Lower Silesian"], ["00-001", "30-001", "50-001"], ["Marszałkowska 10", "Floriańska 25"], () => `+48501${randomNumber(6)}`),
+  "ja-JP": locale("Japan", ["Tokyo", "Osaka", "Kyoto"], ["Tokyo", "Osaka", "Kyoto"], ["100-0001", "530-0001", "600-8001"], ["1-1 Chiyoda", "1-1 Umeda"], () => `+8190${randomNumber(8)}`),
+  "zh-CN": locale("China", ["Beijing", "Shanghai", "Shenzhen"], ["Beijing", "Shanghai", "Guangdong"], ["100000", "200000", "518000"], ["10 Chang'an Avenue", "25 Nanjing Road"], () => `+8613${randomNumber(9)}`),
+  "ko-KR": locale("South Korea", ["Seoul", "Busan", "Incheon"], ["Seoul", "Busan", "Incheon"], ["03000", "48000", "22000"], ["10 Sejong-daero", "25 Haeundae-ro"], () => `+8210${randomNumber(8)}`),
+  "pt-BR": locale("Brazil", ["São Paulo", "Rio de Janeiro", "Brasília"], ["São Paulo", "Rio de Janeiro", "Federal District"], ["01001-000", "20010-000", "70040-010"], ["Avenida Paulista 100", "Avenida Rio Branco 25"], () => `+55119${randomNumber(8)}`),
+  "en-AU": locale("Australia", ["Sydney", "Melbourne", "Brisbane"], ["New South Wales", "Victoria", "Queensland"], ["2000", "3000", "4000"], ["10 George Street", "25 Collins Street"], () => `+614${randomNumber(8)}`),
+  "en-IN": locale("India", ["Mumbai", "Delhi", "Bengaluru"], ["Maharashtra", "Delhi", "Karnataka"], ["400001", "110001", "560001"], ["10 Marine Drive", "25 Connaught Place"], () => `+919${randomNumber(9)}`)
+};
+
+const languageDefaults: Record<string, string> = {
+  en: "en-US",
+  fr: "fr-FR",
+  de: "de-DE",
+  es: "es-ES",
+  it: "it-IT",
+  pt: "pt-PT",
+  nl: "nl-NL",
+  pl: "pl-PL",
+  ja: "ja-JP",
+  zh: "zh-CN",
+  ko: "ko-KR"
+};
+
+function locale(
+  country: string,
+  cities: string[],
+  regions: string[],
+  postalCodes: string[],
+  streets: string[],
+  phone: () => string
+): LocalePersona {
+  return { country, cities, regions, postalCodes, streets, phone };
+}
+
+function resolveLocalePersona(language: string | undefined): LocalePersona {
+  const normalized = (language || "en-US").replace("_", "-");
+  const [languageCode, regionCode] = normalized.split("-");
+  const exactKey = regionCode ? `${languageCode?.toLowerCase()}-${regionCode.toUpperCase()}` : undefined;
+  const fallbackKey = languageDefaults[languageCode?.toLowerCase() ?? ""] ?? "en-US";
+  return localePersonas[exactKey ?? ""] ?? localePersonas[fallbackKey] ?? localePersonas["en-US"]!;
+}
+
+const socialProfileGenerators: Record<string, LocalizedDummyValueGenerator> = {
+  "contact.linkedin": () => `https://www.linkedin.com/in/${randomHandle("-")}`,
+  "contact.github": () => `https://github.com/${randomHandle("-")}`,
+  "contact.facebook": () => `https://www.facebook.com/${randomHandle(".")}`,
+  "contact.twitter": (field) => generateTwitterValue(field),
+  "contact.instagram": () => `https://www.instagram.com/${randomHandle("_")}`,
+  "contact.threads": () => `https://www.threads.net/@${randomHandle("_")}`,
+  "contact.tiktok": () => `https://www.tiktok.com/@${randomHandle("_")}`,
+  "contact.youtube": () => `https://www.youtube.com/@${randomHandle("")}`,
+  "contact.snapchat": () => randomHandle("_"),
+  "contact.pinterest": () => `https://www.pinterest.com/${randomHandle("_")}`,
+  "contact.reddit": () => `https://www.reddit.com/user/${randomHandle("_")}`,
+  "contact.discord": () => randomHandle("_"),
+  "contact.telegram": () => `https://t.me/${randomHandle("_")}`,
+  "contact.whatsapp": (_field, persona) => persona.phone(),
+  "contact.medium": () => `https://medium.com/@${randomHandle("-")}`,
+  "contact.stackoverflow": () => `https://stackoverflow.com/users/12345678/${randomHandle("-")}`,
+  "contact.dribbble": () => `https://dribbble.com/${randomHandle("-")}`,
+  "contact.behance": () => `https://www.behance.net/${randomHandle("-")}`,
+  "contact.bluesky": () => `${randomHandle("-")}.bsky.social`,
+  "contact.mastodon": () => `@${randomHandle("_")}@mastodon.social`,
+  "contact.twitch": () => `https://www.twitch.tv/${randomHandle("_")}`,
+  "contact.gitlab": () => `https://gitlab.com/${randomHandle("-")}`,
+  "contact.bitbucket": () => `https://bitbucket.org/${randomHandle("-")}`,
+  "contact.producthunt": () => `https://www.producthunt.com/@${randomHandle("_")}`
+};
+
+const profileValueGenerators: Record<string, LocalizedDummyValueGenerator> = {
+  "identity.first_name": () => randomChoice(FIRST_NAMES),
+  "identity.last_name": () => randomChoice(LAST_NAMES),
+  "identity.full_name": () => `${randomChoice(FIRST_NAMES)} ${randomChoice(LAST_NAMES)}`,
+  "identity.middle_name": () => randomChoice(FIRST_NAMES),
+  "contact.email": () => `${randomString(6)}@example.com`,
+  "contact.phone": (_field, persona) => persona.phone(),
+  "contact.website": () => `https://www.${randomString(8)}.com`,
+  ...socialProfileGenerators,
+  "address.street_1": (_field, persona) => randomChoice(persona.streets),
+  "address.street_2": () => `Apt ${randomNumber(2)}`,
+  "address.city": (_field, persona) => randomChoice(persona.cities),
+  "address.region": (_field, persona) => randomChoice(persona.regions),
+  "address.postal_code": (_field, persona) => randomChoice(persona.postalCodes),
+  "address.country": (_field, persona) => persona.country,
+  "company.name": () => randomChoice(COMPANIES),
+  "work.current_title": () => "Engineer"
+};
+
+function randomHandle(separator: string): string {
+  return `${SOCIAL_HANDLE_PREFIX}${separator}${randomString(8)}`;
+}
+
+function generateTwitterValue(field: ExtractedField): string {
+  const fieldText = [
+    field.labelText,
+    field.ariaLabel,
+    field.placeholder,
+    field.name,
+    field.id
+  ].filter(Boolean).join(" ").toLowerCase();
+  const handle = randomHandle("_");
+
+  return /\b(url|link|profile|profil)\b/.test(fieldText)
+    ? `https://twitter.com/${handle}`
+    : handle;
 }
 
 /**
@@ -69,7 +197,11 @@ function randomPhoneNumber(): string {
  * @param field The field schema extracted from the form.
  * @param state A mutable state container shared across the current form fill operation.
  */
-export function generateDummyDataForField(field: ExtractedField, state: Record<string, string | boolean> = {}): string | boolean {
+export function generateDummyDataForField(
+  field: ExtractedField,
+  state: Record<string, string | boolean> = {},
+  language = "en-US"
+): string | boolean {
   // Checkbox inputs with no options or single option default to true (checked)
   if (field.inputType === "checkbox" && (!field.options || field.options.length <= 1)) {
     return true;
@@ -87,38 +219,25 @@ export function generateDummyDataForField(field: ExtractedField, state: Record<s
 
   let resultValue: string;
   const profileKey = findProfileKey(field);
+  const persona = resolveLocalePersona(language);
 
   if (profileKey) {
     if (state[profileKey] !== undefined) {
       resultValue = state[profileKey] as string;
     } else {
-      if (profileKey === "identity.first_name") resultValue = randomChoice(FIRST_NAMES);
-      else if (profileKey === "identity.last_name") resultValue = randomChoice(LAST_NAMES);
-      else if (profileKey === "identity.full_name") resultValue = `${randomChoice(FIRST_NAMES)} ${randomChoice(LAST_NAMES)}`;
-      else if (profileKey === "identity.middle_name") resultValue = randomChoice(FIRST_NAMES);
-      else if (profileKey === "contact.email") {
-        if (state["email"] !== undefined) resultValue = state["email"] as string;
-        else resultValue = `${randomString(6)}@example.com`;
-      }
-      else if (profileKey === "contact.phone") {
-        if (state["tel"] !== undefined) resultValue = state["tel"] as string;
-        else resultValue = randomPhoneNumber();
-      }
-      else if (profileKey === "contact.website") resultValue = `https://www.${randomString(8)}.com`;
-      else if (profileKey === "address.street_1") resultValue = `${randomNumber(4)} Main St`;
-      else if (profileKey === "address.street_2") resultValue = `Apt ${randomNumber(2)}`;
-      else if (profileKey === "address.city") resultValue = randomChoice(CITIES);
-      else if (profileKey === "address.region") resultValue = "State";
-      else if (profileKey === "address.postal_code") resultValue = randomNumber(5);
-      else if (profileKey === "address.country") resultValue = "United States";
-      else if (profileKey === "company.name") resultValue = randomChoice(COMPANIES);
-      else if (profileKey === "work.current_title") resultValue = "Engineer";
-      else {
-        resultValue = "Test Value " + randomString(4);
-      }
+      const sharedStateKey = profileKey === "contact.email"
+        ? "email"
+        : profileKey === "contact.phone"
+          ? "tel"
+          : undefined;
+      const cachedValue = sharedStateKey ? state[sharedStateKey] : undefined;
+      const generator = profileValueGenerators[profileKey];
+      resultValue = typeof cachedValue === "string"
+        ? cachedValue
+        : generator?.(field, persona) ?? `Test Value ${randomString(4)}`;
+
       state[profileKey] = resultValue;
-      if (profileKey === "contact.email") state["email"] = resultValue;
-      if (profileKey === "contact.phone") state["tel"] = resultValue;
+      if (sharedStateKey) state[sharedStateKey] = resultValue;
     }
   } else {
     // Fallback heuristics based on input types
@@ -127,7 +246,7 @@ export function generateDummyDataForField(field: ExtractedField, state: Record<s
       else { resultValue = `${randomString(6)}@example.com`; state["email"] = resultValue; }
     } else if (field.inputType === "tel") {
       if (state["tel"] !== undefined) resultValue = state["tel"] as string;
-      else { resultValue = randomPhoneNumber(); state["tel"] = resultValue; }
+      else { resultValue = persona.phone(); state["tel"] = resultValue; }
     } else if (field.inputType === "url") {
       resultValue = `https://www.${randomString(8)}.com`;
     } else if (field.inputType === "number" || field.inputType === "range") {

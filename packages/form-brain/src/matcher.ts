@@ -193,23 +193,23 @@ const profileKeyPatterns: Record<string, PatternConfig> = {
     negative: [/\b(page\s*title|title\s*tag|mr|mrs|ms|dr)\b/i]
   },
   "address.street_1": {
-    strong: ["address line 1", "address 1", "street 1", "street address", "street"],
+    strong: ["address line 1", "address 1", "street 1", "street address", "street", "adresse", "rue", "strasse", "straße", "calle", "via", "rua"],
     weak: ["address"]
   },
   "address.street_2": {
     strong: ["address line 2", "address 2", "apt", "apartment", "suite", "unit"]
   },
   "address.city": {
-    strong: ["city", "town", "locality"]
+    strong: ["city", "town", "locality", "ville", "ciudad", "stadt", "citta", "cidade", "stad", "miasto", "mesto", "sehir"]
   },
   "address.region": {
-    strong: ["state", "province", "region", "address level 1"]
+    strong: ["state", "province", "region", "address level 1", "etat", "état", "bundesland", "regione", "comunidad autonoma", "distrito"]
   },
   "address.postal_code": {
-    strong: ["postal code", "postcode", "zip code", "zipcode", "zip"]
+    strong: ["postal code", "postcode", "zip code", "zipcode", "zip", "code postal", "codepostal", "postleitzahl", "plz", "codigo postal", "codice postale", "codice cap", "cep"]
   },
   "address.country": {
-    strong: ["country", "country name"]
+    strong: ["country", "country name", "pays", "land", "pais", "país", "paese", "nazione"]
   }
 };
 
@@ -750,6 +750,8 @@ function stripMemoryEvidenceTags(value: string): string {
 function normalizeFieldText(value: string): string {
   return value
     .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .replace(/[_-]+/g, " ")
     .replace(/[^a-z0-9]+/g, " ")

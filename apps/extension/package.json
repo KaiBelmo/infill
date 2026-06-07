@@ -28,6 +28,7 @@
     "@types/node": "^24.10.2",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "happy-dom": "^20.10.2",
     "tailwindcss": "^4.2.4",
     "typescript": "^5.9.3",
     "vite-plugin-zip-pack": "^1.2.4",

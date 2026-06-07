@@ -583,6 +583,36 @@ describe("field matcher", () => {
     })).toBe("contact.twitter");
   });
 
+  it("matches localized city labels", () => {
+    expect(findProfileKey({
+      fieldId: "city-fr",
+      formId: "form",
+      tagName: "input",
+      inputType: "text",
+      labelText: "Ville",
+      required: true,
+      disabled: false,
+      readonly: false,
+      visible: true,
+      hasUserValue: false,
+      domPathHint: "input#city"
+    })).toBe("address.city");
+
+    expect(findProfileKey({
+      fieldId: "city-it",
+      formId: "form",
+      tagName: "input",
+      inputType: "text",
+      labelText: "Città",
+      required: true,
+      disabled: false,
+      readonly: false,
+      visible: true,
+      hasUserValue: false,
+      domPathHint: "input#city-it"
+    })).toBe("address.city");
+  });
+
   it("does not match identity name from username fields", () => {
     expect(findProfileKey({
       fieldId: "username",
