@@ -47,3 +47,31 @@ Use these fixtures to verify scanner behavior across normal forms, disabled fiel
 ## Local AI
 
 Contributors can use local Ollama for AI-assisted workflows. Configure the Ollama base URL and model from the extension options UI after loading the unpacked extension.
+
+### Recommended Ollama Models
+
+Local AI should use an instruction-tuned model that can return strict JSON within the extension timeout. On a lower-VRAM Windows laptop, use these models in order:
+
+| Priority | Model | Use when | Notes |
+| --- | --- | --- | --- |
+| 1 | `qwen2.5:3b-instruct-q4_K_M` | Recommended default | Best balance tested for local JSON/instruction following while staying small enough for this machine class. |
+| 2 | `qwen2.5:1.5b` | Faster fallback | Use if the 3B model is too slow. Expect weaker reasoning and more schema mistakes. |
+| 3 | `llama3.2:3b` | Alternative 3B instruct model | Try if Qwen 3B is unavailable or gives poor output. |
+
+Avoid using very small or oversized models for the local assist path:
+
+- `qwen2.5:0.5b` can run locally, but it may copy examples or return invalid JSON for matcher prompts.
+- 9B-class models such as `qwen3.5:9b-q4_K_M` may be too slow on this setup and can miss the extension timeout.
+
+Install the recommended model with:
+
+```powershell
+ollama pull qwen2.5:3b-instruct-q4_K_M
+```
+
+Then configure the extension options UI with:
+
+```text
+Ollama base URL: http://localhost:11434/v1
+Ollama model: qwen2.5:3b-instruct-q4_K_M
+```
