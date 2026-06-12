@@ -22,6 +22,9 @@ importers:
       '@infill/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@infill/snaplog':
+        specifier: npm:@kaibelmo/snaplog@^0.1.5
+        version: '@kaibelmo/snaplog@0.1.5'
       '@vitejs/plugin-react':
         specifier: ^5.1.2
         version: 5.2.0(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0))
@@ -378,6 +381,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@kaibelmo/snaplog@0.1.5':
+    resolution: {integrity: sha512-1EgsUB5ABWmhYFNn5XQsYnckZPHY8b7zLMyjqHcxTpsNqz+L7Ux8ftmFpr324J+bouOkrIGLXYel+ocqP9+3uw==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -1557,6 +1563,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@kaibelmo/snaplog@0.1.5': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
