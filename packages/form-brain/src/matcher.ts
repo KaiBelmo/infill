@@ -42,6 +42,86 @@ type PatternConfig = {
   negative?: RegExp[];
 };
 
+export type ProfileFactResolutionContext = {
+  preferPast?: boolean;
+  formPurpose?: "profile" | "checkout" | "job" | "contact" | "unknown";
+  sensitivity?: "low" | "medium" | "high";
+};
+
+export type LlmKeyMatchResponse = {
+  bestFactKey: string | null;
+  confidence: number;
+  reason: string;
+  relationship: "direct_alias" | "semantic_source" | "weak_possible_source" | "not_applicable" | "stale_or_historical";
+  risks?: string[];
+  suggestedProfileKey?: string | null;
+};
+
+export type LlmBatchKeyMatchRequest = {
+  targets: Array<{ targetKey: string; targetLabel?: string; context?: ProfileFactResolutionContext }>;
+  facts: Array<{ key: string; label?: string }>;
+};
+
+export type LlmBatchKeyMatchItem = LlmKeyMatchResponse & { targetKey: string };
+export type LlmBatchKeyMatchResponse = { matches: LlmBatchKeyMatchItem[] };
+
+export type ProfileFactResolverOptions = {
+  enableLlmKeyMatcherFallback?: boolean;
+  llmKeyMatcher?: (request: {
+    targetKey: string;
+    targetLabel?: string;
+    facts: LlmBatchKeyMatchRequest["facts"];
+    context?: ProfileFactResolutionContext;
+  }) => LlmKeyMatchResponse | undefined;
+  llmBatchKeyMatcher?: (request: LlmBatchKeyMatchRequest) => LlmBatchKeyMatchResponse | undefined;
+};
+
+export function parseLlmBatchKeyMatchResponse(text: string, providerLabel = "LLM"): LlmBatchKeyMatchResponse {
+  const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/gi, "");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error(`${providerLabel} key matcher returned invalid JSON.`);
+  }
+  if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { matches?: unknown }).matches)) {
+    throw new Error(`${providerLabel} key matcher response must contain a matches array.`);
+  }
+
+  return {
+    matches: (parsed as { matches: unknown[] }).matches.map((value) => {
+      if (!value || typeof value !== "object") {
+        throw new Error(`${providerLabel} key matcher match item must be an object.`);
+      }
+      const item = value as Record<string, unknown>;
+      if (typeof item.targetKey !== "string" || !item.targetKey) {
+        throw new Error(`${providerLabel} key matcher match item is missing targetKey.`);
+      }
+      if (item.bestFactKey !== null && typeof item.bestFactKey !== "string") {
+        throw new Error(`${providerLabel} key matcher bestFactKey must be a string or null.`);
+      }
+      if (typeof item.confidence !== "number" || item.confidence < 0 || item.confidence > 1) {
+        throw new Error(`${providerLabel} key matcher confidence must be between 0 and 1.`);
+      }
+      const relationship = item.bestFactKey === null && item.relationship == null ? "not_applicable" : item.relationship;
+      if (!["direct_alias", "semantic_source", "weak_possible_source", "not_applicable", "stale_or_historical"].includes(String(relationship))) {
+        throw new Error(`${providerLabel} key matcher relationship is invalid.`);
+      }
+      return {
+        targetKey: item.targetKey,
+        bestFactKey: item.bestFactKey as string | null,
+        confidence: item.confidence,
+        relationship: relationship as LlmBatchKeyMatchItem["relationship"],
+        reason: typeof item.reason === "string" ? item.reason : "",
+        risks: Array.isArray(item.risks) ? item.risks.filter((risk): risk is string => typeof risk === "string") : undefined,
+        suggestedProfileKey: typeof item.suggestedProfileKey === "string" || item.suggestedProfileKey === null
+          ? item.suggestedProfileKey
+          : undefined
+      };
+    })
+  };
+}
+
 const MIN_ACCEPTED_SCORE = 70;
 const MIN_SCORE_GAP = 15;
 const WEAK_SIGNAL_SOURCES = new Set<FieldSignalSource>(["section", "className"]);
@@ -222,7 +302,11 @@ function normalizeKey(value: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-export function mapFieldToProfile(field: ExtractedField, facts: ProfileFact[]): FieldMapping {
+export function mapFieldToProfile(
+  field: ExtractedField,
+  facts: ProfileFact[],
+  resolverOptions: ProfileFactResolverOptions = {}
+): FieldMapping {
   const risk = classifyFieldRisk(field);
   const blocked = isFillBlocked(risk);
 
@@ -260,7 +344,7 @@ export function mapFieldToProfile(field: ExtractedField, facts: ProfileFact[]): 
     };
   }
 
-  const factMatch = matchedKey ? resolveProfileFactValue(matchedKey, facts) : undefined;
+  const factMatch = matchedKey ? resolveProfileFactValue(matchedKey, facts, resolverOptions) : undefined;
 
   if (!factMatch) {
     const invalidMatchingFact = matchedKey
@@ -303,8 +387,32 @@ export function mapFieldToProfile(field: ExtractedField, facts: ProfileFact[]): 
   };
 }
 
-export function mapFieldsToProfile(fields: ExtractedField[], facts: ProfileFact[]): FieldMapping[] {
-  return fields.map((field) => mapFieldToProfile(field, facts));
+export function mapFieldsToProfile(
+  fields: ExtractedField[],
+  facts: ProfileFact[],
+  resolverOptions: ProfileFactResolverOptions = {}
+): FieldMapping[] {
+  return fields.map((field) => mapFieldToProfile(field, facts, resolverOptions));
+}
+
+export function buildLlmBatchKeyMatchRequest(
+  fields: ExtractedField[],
+  facts: ProfileFact[]
+): LlmBatchKeyMatchRequest | undefined {
+  const targets = fields.flatMap((field) => {
+    const targetKey = findProfileKey(field);
+    if (!targetKey || resolveProfileFactValue(targetKey, facts)) return [];
+    return [{ targetKey, targetLabel: labelForProfileKey(targetKey, field) }];
+  });
+  return targets.length ? { targets, facts: facts.map(({ key, label }) => ({ key, label })) } : undefined;
+}
+
+export function buildLlmBatchKeyMatchPrompt(request: LlmBatchKeyMatchRequest): string {
+  return [
+    "Match unresolved form targets to allowed fact keys. Return JSON only with shape {\"matches\":[...]}.",
+    "Use null when unclear. Do not include fact values.",
+    JSON.stringify(request, null, 2)
+  ].join("\n");
 }
 
 export function inferProfileFactFromFieldValue(field: ExtractedField, value: string): LearnedProfileFactInput | undefined {
@@ -667,11 +775,26 @@ function isValidFactForProfileKey(key: string | undefined, value: ProfileFact["v
 
 function resolveProfileFactValue(
   key: string,
-  facts: ProfileFact[]
+  facts: ProfileFact[],
+  resolverOptions: ProfileFactResolverOptions = {}
 ): { fact: ProfileFact; profileKey: string; value: string | number | boolean | string[]; derived: boolean } | undefined {
   const direct = facts.find((candidate) => keysMatch(candidate.key, key) && isValidFactForProfileKey(key, candidate.value));
   if (direct) {
     return { fact: direct, profileKey: direct.key, value: normalizeFactValue(direct.value), derived: false };
+  }
+
+  if (resolverOptions.enableLlmKeyMatcherFallback && resolverOptions.llmKeyMatcher) {
+    const match = resolverOptions.llmKeyMatcher({
+      targetKey: key,
+      facts: facts.map(({ key: factKey, label }) => ({ key: factKey, label }))
+    });
+    const fact = match?.bestFactKey ? facts.find((candidate) => candidate.key === match.bestFactKey) : undefined;
+    if (fact && match && match.confidence >= 0.7 && match.relationship !== "not_applicable" && match.relationship !== "stale_or_historical") {
+      const value = key === "address.city" && typeof fact.value === "string"
+        ? fact.value.split(",")[0]?.trim()
+        : normalizeFactValue(fact.value);
+      if (value !== undefined) return { fact, profileKey: key, value, derived: true };
+    }
   }
 
   if (key === "contact.email") {

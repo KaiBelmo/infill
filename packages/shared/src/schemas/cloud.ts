@@ -188,6 +188,20 @@ export const CloudAssistResponseSchema = z.object({
   model: z.string().optional()
 });
 
+export const CloudKeyMatchRequestSchema = z.object({
+  prompt: z.string().min(1).max(30_000),
+  requestedAt: z.string().datetime()
+});
+
+export const CloudKeyMatchResponseSchema = z.object({
+  rawResponseText: z.string(),
+  source: CloudFeatureSourceSchema,
+  warnings: z.array(z.string()).default([]),
+  credits: CreditBalanceSchema,
+  providerId: z.string().optional(),
+  model: z.string().optional()
+});
+
 export type BillingMode = z.infer<typeof BillingModeSchema>;
 export type SubscriptionPlan = z.infer<typeof SubscriptionPlanSchema>;
 export type SubscriptionStatus = z.infer<typeof SubscriptionStatusSchema>;
@@ -243,6 +257,8 @@ export const ExtensionAuthExchangeRequestSchema = z.object({
 
 export type CloudAssistRequest = z.infer<typeof CloudAssistRequestSchema>;
 export type CloudAssistResponse = z.infer<typeof CloudAssistResponseSchema>;
+export type CloudKeyMatchRequest = z.infer<typeof CloudKeyMatchRequestSchema>;
+export type CloudKeyMatchResponse = z.infer<typeof CloudKeyMatchResponseSchema>;
 export type ParsedProfileField = z.infer<typeof ParsedProfileFieldSchema>;
 export type ParseProfileRequest = z.infer<typeof ParseProfileRequestSchema>;
 export type ParseProfileResponse = z.infer<typeof ParseProfileResponseSchema>;
