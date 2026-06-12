@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { LearnedFactConflict } from "@/shared/types";
 import type { ReviewableFact } from "../hooks/useOptionsState";
 import { inputClass, panelClass, primaryButtonClass, secondaryButtonClass, sectionHeadingLabelClass, sectionHeadingTitleClass } from "@/shared/ui-styles";
@@ -18,6 +20,7 @@ type MemoryViewProps = {
   reviewCount: number;
   canParseWithLlm: boolean;
   parsingWithLlm: boolean;
+  hasStatusOverlay: boolean;
   switchProfile: (profileId: string) => Promise<void>;
   setStatus: (value: string) => void;
   reviewMemory: () => void;
@@ -45,6 +48,7 @@ export function MemoryView({
   reviewCount,
   canParseWithLlm,
   parsingWithLlm,
+  hasStatusOverlay,
   switchProfile,
   setStatus,
   reviewMemory,
@@ -54,6 +58,79 @@ export function MemoryView({
   removeDetectedFact,
   resolveConflict
 }: MemoryViewProps) {
+  const [showUncheckedSaveDialog, setShowUncheckedSaveDialog] = useState(false);
+  const [activeUncheckedIndex, setActiveUncheckedIndex] = useState<number | undefined>(undefined);
+  const uncheckedIndexes = detectedFacts
+    .map((fact, index) => fact.approved ? -1 : index)
+    .filter((index) => index >= 0);
+
+  useEffect(() => {
+    if (uncheckedIndexes.length === 0) {
+      setActiveUncheckedIndex(undefined);
+      return;
+    }
+
+    if (activeUncheckedIndex === undefined || !uncheckedIndexes.includes(activeUncheckedIndex)) {
+      setActiveUncheckedIndex(uncheckedIndexes[0]);
+    }
+  }, [activeUncheckedIndex, uncheckedIndexes]);
+
+  const jumpToUnchecked = (index: number | undefined) => {
+    if (index === undefined) return;
+    setActiveUncheckedIndex(index);
+    document.getElementById(`detected-fact-${index}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+    document.getElementById(`detected-fact-approval-${index}`)?.focus();
+  };
+  const moveUnchecked = (direction: "previous" | "next") => {
+    if (uncheckedIndexes.length === 0) return;
+    const currentPosition = activeUncheckedIndex === undefined ? -1 : uncheckedIndexes.indexOf(activeUncheckedIndex);
+    const nextPosition = direction === "next"
+      ? currentPosition < 0 ? 0 : (currentPosition + 1) % uncheckedIndexes.length
+      : currentPosition <= 0 ? uncheckedIndexes.length - 1 : currentPosition - 1;
+    jumpToUnchecked(uncheckedIndexes[nextPosition]);
+  };
+  const approveActiveUnchecked = () => {
+    if (activeUncheckedIndex === undefined) return;
+    const currentPosition = uncheckedIndexes.indexOf(activeUncheckedIndex);
+    const remainingIndexes = uncheckedIndexes.filter((index) => index !== activeUncheckedIndex);
+    const nextIndex = remainingIndexes.length === 0
+      ? undefined
+      : remainingIndexes[Math.min(currentPosition, remainingIndexes.length - 1)];
+    updateDetectedFact(activeUncheckedIndex, { approved: true });
+    setActiveUncheckedIndex(nextIndex);
+    if (nextIndex !== undefined) {
+      window.setTimeout(() => jumpToUnchecked(nextIndex), 0);
+    }
+  };
+  const handlePrimaryMemoryAction = () => {
+    if (detectedFacts.length === 0) {
+      if (canParseWithLlm) {
+        void reviewMemoryWithLlm();
+      } else {
+        reviewMemory();
+      }
+      return;
+    }
+
+    if (reviewCount > 0) {
+      setShowUncheckedSaveDialog(true);
+      return;
+    }
+
+    void saveApprovedFacts();
+  };
+  const reviewUncheckedFromDialog = () => {
+    setShowUncheckedSaveDialog(false);
+    jumpToUnchecked(activeUncheckedIndex ?? uncheckedIndexes[0]);
+  };
+  const saveApprovedAndDiscardUnchecked = () => {
+    setShowUncheckedSaveDialog(false);
+    void saveApprovedFacts();
+  };
+
   return (
     <section
       aria-labelledby="memory-title"
@@ -122,7 +199,7 @@ export function MemoryView({
                   className={primaryButtonClass}
                   type="button"
                   disabled={parsingWithLlm}
-                  onClick={detectedFacts.length > 0 ? saveApprovedFacts : canParseWithLlm ? reviewMemoryWithLlm : reviewMemory}
+                  onClick={handlePrimaryMemoryAction}
                 >
                   {detectedFacts.length > 0 ? "Save approved facts" : canParseWithLlm ? parsingWithLlm ? "Parsing with AI..." : "Parse with AI" : "Review facts"}
                 </button>
@@ -185,9 +262,11 @@ export function MemoryView({
             <span className={sectionHeadingLabelClass}>Fact review</span>
             <h3 className={`${sectionHeadingTitleClass} m-0`}>Detected facts</h3>
           </div>
-          <span className="text-sm text-[var(--color-ink-soft)]">
-            {approvedDetectedFacts} approved / {reviewCount} waiting
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-[var(--color-ink-soft)]">
+              {approvedDetectedFacts} approved / {reviewCount} unchecked
+            </span>
+          </div>
         </div>
 
         {detectedFacts.length === 0 ? (
@@ -197,10 +276,11 @@ export function MemoryView({
         ) : (
           <div className="grid gap-3">
             {detectedFacts.map((fact, index) => (
-              <article className="grid gap-3 rounded-[16px] border border-[var(--color-line)] bg-[var(--color-mist)] p-4" key={`${fact.key}-${index}`}>
+              <article className="grid gap-3 rounded-[16px] border border-[var(--color-line)] bg-[var(--color-mist)] p-4" id={`detected-fact-${index}`} key={`${fact.key}-${index}`}>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <label className="flex items-center gap-3 text-sm font-semibold text-[var(--color-ink)]">
                     <input
+                      id={`detected-fact-approval-${index}`}
                       checked={fact.approved}
                       className="h-[18px] w-[18px] accent-[var(--color-black-soft)]"
                       onChange={(event) => updateDetectedFact(index, { approved: event.target.checked })}
@@ -209,8 +289,8 @@ export function MemoryView({
                     <span>{fact.approved ? "Approved" : "Needs review"}</span>
                   </label>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full px-3 py-1 text-[11px] font-[780] uppercase tracking-[0.12em] ${fact.sensitivity === "normal" ? "bg-[rgba(36,138,61,0.12)] text-[var(--color-success)]" : fact.sensitivity === "restricted" ? "bg-[rgba(178,117,0,0.12)] text-[var(--color-warning)]" : "bg-[rgba(215,0,21,0.1)] text-[var(--color-danger)]"}`}>
-                      {fact.sensitivity}
+                    <span className={`rounded-full px-3 py-1 text-[11px] font-[780] uppercase tracking-[0.12em] ${confidenceChipClass(fact.confidence)}`}>
+                      Confidence {fact.confidence}
                     </span>
                     <button className={secondaryButtonClass} type="button" onClick={() => removeDetectedFact(index)}>
                       Delete
@@ -228,7 +308,7 @@ export function MemoryView({
                   <input
                     aria-label={`Fact value ${index + 1}`}
                     className={inputClass}
-                    value={fact.value}
+                    value={fact.value == null ? "" : String(fact.value)}
                     onChange={(event) => updateDetectedFact(index, { value: event.target.value })}
                   />
                 </div>
@@ -237,6 +317,71 @@ export function MemoryView({
           </div>
         )}
       </section>
+
+      {createPortal(
+        <>
+          {reviewCount > 0 ? (
+            <div className={`fixed right-5 z-40 grid w-[min(360px,calc(100vw-40px))] gap-2 rounded-[28px] border border-[var(--color-line)] bg-white p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] ${hasStatusOverlay ? "bottom-28 sm:bottom-32" : "bottom-5 sm:bottom-6"}`}>
+              <div className="grid grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-2">
+                <span className="pl-3 text-sm font-[760] text-[var(--color-ink)]">
+                  Unchecked {activeUncheckedIndex === undefined ? 1 : Math.max(uncheckedIndexes.indexOf(activeUncheckedIndex) + 1, 1)} / {reviewCount}
+                </span>
+                <button
+                  aria-label="Previous unchecked fact"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-[var(--color-line)] bg-white text-lg font-[760] text-[var(--color-ink)] transition hover:border-[var(--color-ink-soft)] focus:outline-none focus:ring-2 focus:ring-[var(--color-black-soft)] focus:ring-offset-2"
+                  type="button"
+                  onClick={() => moveUnchecked("previous")}
+                >
+                  {"<"}
+                </button>
+                <button
+                  aria-label="Next unchecked fact"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-[var(--color-line)] bg-white text-lg font-[760] text-[var(--color-ink)] transition hover:border-[var(--color-ink-soft)] focus:outline-none focus:ring-2 focus:ring-[var(--color-black-soft)] focus:ring-offset-2"
+                  type="button"
+                  onClick={() => moveUnchecked("next")}
+                >
+                  {">"}
+                </button>
+              </div>
+              <button
+                className="min-h-11 rounded-full bg-[var(--color-black-soft)] px-4 py-2 text-sm font-[760] text-white transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-black-soft)] focus:ring-offset-2"
+                type="button"
+                onClick={approveActiveUnchecked}
+              >
+                Approve
+              </button>
+            </div>
+          ) : null}
+
+          {showUncheckedSaveDialog ? (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4 py-6" role="presentation">
+              <section
+                aria-labelledby="unchecked-save-title"
+                aria-modal="true"
+                className="grid w-full max-w-[440px] gap-4 rounded-[16px] border border-[var(--color-line)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]"
+                role="dialog"
+              >
+                <div className="grid gap-2">
+                  <span className={sectionHeadingLabelClass}>Unchecked facts</span>
+                  <h3 className={`${sectionHeadingTitleClass} m-0`} id="unchecked-save-title">Save approved only?</h3>
+                  <p className="m-0 text-sm leading-6 text-[var(--color-ink-soft)]">
+                    {reviewCount} unchecked fact{reviewCount === 1 ? "" : "s"} will be removed from this review. Approved facts will still be saved.
+                  </p>
+                </div>
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <button className={secondaryButtonClass} type="button" onClick={reviewUncheckedFromDialog}>
+                    Review unchecked
+                  </button>
+                  <button className={primaryButtonClass} type="button" onClick={saveApprovedAndDiscardUnchecked}>
+                    Save approved only
+                  </button>
+                </div>
+              </section>
+            </div>
+          ) : null}
+        </>,
+        document.body
+      )}
     </section>
   );
 }
@@ -248,4 +393,17 @@ function MemoryStat({ label, value }: { label: string; value: number }) {
       <strong className="mt-1 block text-sm text-[var(--color-ink)]">{value}</strong>
     </div>
   );
+}
+
+function confidenceChipClass(confidence: ReviewableFact["confidence"]): string {
+  switch (confidence) {
+    case "high":
+      return "bg-[rgba(36,138,61,0.12)] text-[var(--color-success)]";
+    case "medium":
+      return "bg-[rgba(178,117,0,0.12)] text-[var(--color-warning)]";
+    case "low":
+      return "bg-[rgba(215,0,21,0.1)] text-[var(--color-danger)]";
+    case "missing":
+      return "bg-[rgba(75,85,99,0.12)] text-[var(--color-ink-soft)]";
+  }
 }

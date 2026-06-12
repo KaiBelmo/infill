@@ -144,6 +144,7 @@ function Options() {
             reviewCount={state.reviewCount}
             canParseWithLlm={state.canParseWithLlm}
             parsingWithLlm={state.parsingWithLlm}
+            hasStatusOverlay={Boolean(state.clearedFactsUndo || state.toast)}
             switchProfile={state.switchProfile}
             setStatus={state.setStatus}
             reviewMemory={state.reviewMemory}
@@ -182,7 +183,6 @@ function Options() {
             unlockEncryptedSync={state.unlockEncryptedSync}
             lockEncryptedSync={state.lockEncryptedSync}
             toggleCloudAssist={state.toggleCloudAssist}
-            toggleDeveloperMode={state.toggleDeveloperMode}
             saveLocalOllamaConfig={state.saveLocalOllamaConfig}
             detectLocalOllamaModels={state.detectLocalOllamaModels}
             refreshSessionState={state.refreshSessionState}

@@ -1,14 +1,14 @@
 import { create } from "zustand";
-import { type MemoryFactDraft, parseMemoryFacts } from "@infill/profile-vault";
+import { confidenceForMemoryValue, type ConfidenceLevel, type MemoryFactDraft, parseMemoryFacts } from "@infill/profile-vault";
 import type { ParsedProfileField, ProfileCategory, ProfileFact, Sensitivity } from "@infill/shared";
-import { type LocalProfileRecord, useProfileStore, toPublicExtensionState } from "@/background/profile-store";
+import { type LocalProfileRecord, persistProfileStoreNow, useProfileStore, toPublicExtensionState } from "@/background/profile-store";
 import { useSyncEncryptionStore } from "@/background/sync-encryption-store";
 import { runCloudParseProfile } from "@/cloudClient";
 import { applyProfileSyncDecision, prepareProfileSync, resolveProfileSyncConflict as resolveCloudProfileSyncConflict } from "@/cloudClient";
 import type { LearnedFactConflict } from "@/shared/types";
 import { useCloudClientStore } from "@/shared/stores/cloud-client-store";
 import { findProfileKeyFromLabel, categoryForProfileKey, extractJson } from "@infill/form-brain";
-import { debugLog } from "@/shared/debug-log";
+import { debugLog, injectDebugLog } from "@/shared/debug-log";
 
 export type ReviewableFact = MemoryFactDraft & {
   approved: boolean;
@@ -131,18 +131,16 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
     if (parsed.length === 0) {
       const message = "Paste facts as Label: Value before reviewing.";
       set({ detectedFacts: [], status: message });
-      get().notify(message, "error");
       return;
     }
     const message = `${parsed.length} possible facts detected`;
     set({
-      detectedFacts: parsed.map((fact) => ({
-        ...fact,
-        approved: fact.sensitivity === "normal"
-      })),
+        detectedFacts: parsed.map((fact) => ({
+          ...fact,
+          approved: shouldAutoApproveDetectedFact(fact)
+        })),
       status: message
     });
-    get().notify(message);
   },
 
   async reviewMemoryWithLlm() {
@@ -150,7 +148,6 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
     if (!memoryText.trim()) {
       const message = "Paste your profile data before parsing with AI.";
       set({ status: message });
-      get().notify(message, "error");
       return;
     }
 
@@ -198,7 +195,6 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
       if (!hasOllama) {
         const message = `Ollama is not running at ${nativeBaseUrl} or has no models installed. Local review is limited until an LLM is connected.`;
         set({ parsingWithLlm: false, status: message });
-        get().notify(message, "error");
         get().reviewMemory();
         return;
       }
@@ -255,16 +251,13 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
 
         const llmFacts: ReviewableFact[] = [];
         for (const [label, rawValue] of Object.entries(parsedObj)) {
-          const valStr = typeof rawValue === "string" ? rawValue.trim() : String(rawValue).trim();
-          const value = valStr
-            .replace(/(?:\s*\[[^\]\r\n]{1,80}\]\s*)+$/g, "")
-            .replace(/\s+from\s+platform-provided\s+location\s+estimates?\.?$/i, "")
-            .replace(/\s+from\s+location\s+estimates?\.?$/i, "")
-            .trim();
-          if (!label || !value) continue;
+          const value = normalizeReviewableFactValue(rawValue);
+          if (!label || value === undefined) continue;
+          const confidence = confidenceForReviewableValue(rawValue, value, label);
 
           const key = normalizeCanonicalProfileKey(label) ?? findProfileKeyFromLabel(label) ?? `custom.${label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`;
           
+          const category = categoryForProfileKey(key);
           const normalizedLabel = label.toLowerCase();
           let sensitivity: "secret" | "restricted" | "normal" = "normal";
           if (/\bpassword|card|bank|ssn|passport|secret|token|key\b/.test(normalizedLabel)) {
@@ -273,15 +266,14 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
             sensitivity = "restricted";
           }
 
-          const category = categoryForProfileKey(key);
-
           llmFacts.push({
             key,
             label,
             value,
             category,
             sensitivity,
-            approved: sensitivity === "normal"
+            confidence,
+            approved: shouldAutoApproveDetectedFact({ sensitivity, confidence })
           });
         }
 
@@ -289,7 +281,7 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
         const llmKeys = new Set(llmFacts.map((fact) => fact.key));
         const extraLocal = localParsed.filter((fact) => !llmKeys.has(fact.key)).map((fact) => ({
           ...fact,
-          approved: fact.sensitivity === "normal"
+          approved: shouldAutoApproveDetectedFact(fact)
         }));
 
         set({
@@ -297,7 +289,6 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
           status: `Ollama (${ollamaModel}) detected ${llmFacts.length} fields${extraLocal.length > 0 ? ` + ${extraLocal.length} from local parse` : ""}`,
           parsingWithLlm: false
         });
-        get().notify(`Ollama (${ollamaModel}) detected ${llmFacts.length} fields${extraLocal.length > 0 ? ` + ${extraLocal.length} from local parse` : ""}`);
       } catch (error) {
         console.error("Local AI parsing failed, falling back to local review", error);
         const message = error instanceof Error ? `Local AI failed: ${error.message}. Local review is limited until an LLM is connected.` : "Local AI failed. Local review is limited until an LLM is connected.";
@@ -305,7 +296,6 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
           status: message,
           parsingWithLlm: false
         });
-        get().notify(message, "error");
         get().reviewMemory();
       }
       return;
@@ -314,28 +304,60 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
     set({ parsingWithLlm: true, status: "Parsing profile with AI..." });
 
     try {
+      injectDebugLog({
+        event: "parse_profile_cloud_start",
+        plan: cloudState?.auth?.account.subscription.plan,
+        subscriptionStatus: cloudState?.auth?.account.subscription.status,
+        hasSessionToken: Boolean(cloudState?.auth?.sessionToken),
+        cloudAssistEnabled: cloudState?.config?.cloudAssistEnabled,
+        apiBaseUrl: cloudState?.config?.apiBaseUrl,
+        rawTextLength: memoryText.length,
+        rawLineCount: memoryText.split(/\r?\n/).filter((line) => line.trim()).length,
+        localParseCount: parseMemoryFacts(memoryText).length
+      }, "options/parse-profile");
       const result = await runCloudParseProfile({ rawText: memoryText, locale: "en" });
+      injectDebugLog({
+        event: "parse_profile_cloud_result",
+        source: result.source,
+        attemptedCloudCall: result.attemptedCloudCall,
+        fieldCount: result.fields.length,
+        fieldKeys: result.fields.map((field) => field.key),
+        warnings: result.warnings,
+        creditsRemaining: result.credits.remaining
+      }, "options/parse-profile");
       if (result.fields.length === 0) {
-        const message = "AI could not detect any profile fields. Try local review instead.";
-        set({ status: message, parsingWithLlm: false });
-        get().notify(message, "error");
+        const localParsed = parseMemoryFacts(memoryText);
+        const message = cloudParseEmptyMessage(result);
+        set({
+          detectedFacts: localParsed.map((fact) => ({
+            ...fact,
+            approved: shouldAutoApproveDetectedFact(fact)
+          })),
+          status: localParsed.length > 0 ? `${message} ${localParsed.length} facts found by local review.` : message,
+          parsingWithLlm: false
+        });
         return;
       }
 
-      const llmFacts: ReviewableFact[] = result.fields.map((field: ParsedProfileField) => ({
-        key: field.key,
-        label: field.label,
-        value: field.value,
-        category: field.category,
-        sensitivity: "normal" as const,
-        approved: true
-      }));
+      const llmFacts: ReviewableFact[] = result.fields.map((field: ParsedProfileField) => {
+        const value = normalizeReviewableFactValue(field.value) ?? null;
+        const confidence = confidenceForReviewableValue(field.value, value, field.label);
+        return {
+          key: field.key,
+          label: field.label,
+          value,
+          category: field.category,
+          sensitivity: "normal" as const,
+          confidence,
+          approved: shouldAutoApproveDetectedFact({ sensitivity: "normal" as const, confidence })
+        };
+      });
 
       const localParsed = parseMemoryFacts(memoryText);
       const llmKeys = new Set(llmFacts.map((fact) => fact.key));
       const extraLocal = localParsed.filter((fact) => !llmKeys.has(fact.key)).map((fact) => ({
         ...fact,
-        approved: fact.sensitivity === "normal"
+        approved: shouldAutoApproveDetectedFact(fact)
       }));
 
       const message = `AI detected ${result.fields.length} fields${extraLocal.length > 0 ? ` + ${extraLocal.length} from local parse` : ""}`;
@@ -344,11 +366,9 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
         status: message,
         parsingWithLlm: false
       });
-      get().notify(message);
     } catch (error) {
       const message = error instanceof Error ? error.message : "AI parsing failed. Try local review.";
       set({ status: message, parsingWithLlm: false });
-      get().notify(message, "error");
       get().reviewMemory();
     }
   },
@@ -373,10 +393,11 @@ export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get
         category: fact.category,
         sensitivity: fact.sensitivity,
         source: "pasted_memory",
-        verified: true,
-        confidence: 1
+        verified: fact.confidence === "high",
+        confidence: confidenceScore(fact.confidence)
       }, profileId);
     }
+    await persistProfileStoreNow();
 
     const message = `Saved ${approvedFacts.length} approved facts`;
     set({ memoryText: "", detectedFacts: [], status: message });
@@ -737,11 +758,87 @@ function inferToastTone(message: string): OptionsToastMessage["tone"] {
     : "default";
 }
 
+function cloudParseEmptyMessage(result: Awaited<ReturnType<typeof runCloudParseProfile>>): string {
+  const warning = result.warnings.find((item) => item.trim().length > 0);
+  if (warning) {
+    return `Cloud AI could not parse profile fields: ${warning}`;
+  }
+
+  if (result.source === "local_fallback") {
+    return "Cloud AI is unavailable for profile parsing. Try local review instead.";
+  }
+
+  return "AI could not detect any profile fields. Try local review instead.";
+}
+
 function normalizeCanonicalProfileKey(value: string): string | undefined {
   const normalized = value.trim().toLowerCase();
   return /^(identity|contact|address|work|company|custom)\.[a-z0-9_]+$/.test(normalized)
     ? normalized
     : undefined;
+}
+
+function normalizeReviewableFactValue(value: unknown): ProfileFact["value"] | undefined {
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const cleaned = value
+      .replace(/(?:\s*\[[^\]\r\n]{1,80}\]\s*)+$/g, "")
+      .replace(/\s+from\s+platform-provided\s+location\s+estimates?\.?$/i, "")
+      .replace(/\s+from\s+location\s+estimates?\.?$/i, "")
+      .trim();
+    if (!cleaned) {
+      return undefined;
+    }
+    return isUnknownPlaceholderValue(cleaned) ? null : cleaned;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean" || Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "object") {
+    return value as Record<string, unknown>;
+  }
+
+  return undefined;
+}
+
+function confidenceForReviewableValue(value: unknown, normalizedValue: ProfileFact["value"], label?: string): ConfidenceLevel {
+  if (value === null) {
+    return "missing";
+  }
+
+  if (typeof value === "string") {
+    return confidenceForMemoryValue(value, normalizedValue, label);
+  }
+
+  return normalizedValue === null ? "missing" : "high";
+}
+
+function shouldAutoApproveDetectedFact(fact: Pick<ReviewableFact, "sensitivity" | "confidence">): boolean {
+  return fact.sensitivity === "normal" && (fact.confidence === "high" || fact.confidence === "medium");
+}
+
+function confidenceScore(confidence: ConfidenceLevel): number {
+  switch (confidence) {
+    case "high":
+      return 1;
+    case "medium":
+      return 0.7;
+    case "low":
+      return 0.4;
+    case "missing":
+      return 0;
+  }
+}
+
+function isUnknownPlaceholderValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase().replace(/[.\s_-]+$/g, "");
+  const words = normalized.split(/\s+/).filter(Boolean);
+  return words.length <= 8 && /\b(unknown|none|null|n\/a|na|not applicable|not provided|not specified|unspecified|missing|no answer|i don't know|i do not know|dont know|don't know)\b/i.test(normalized);
 }
 
 async function deleteCloudProfileAfterLocalChange(profileId: string, sessionToken?: string): Promise<void> {

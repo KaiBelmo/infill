@@ -14,6 +14,7 @@ import type {
 import type { SyncEncryptionState } from "@/shared/types";
 import type { CloudState } from "./background/cloud";
 import type { DeviceInfo, LearnedFactConflict, LearnedFactUndo } from "./cloudClient";
+import type { SnaplogEntry } from "@infill/snaplog";
 
 type LearnedFactPayload = {
   key: string;
@@ -31,7 +32,9 @@ type CloudConfigInput = {
   ollamaBaseUrl?: string;
   ollamaModel?: string;
   ollamaModelOptions?: string[];
+  ollamaTimeout?: number;
   localOllamaFallbackToCloud?: boolean;
+  enableLlmKeyMatcherFallback?: boolean;
 };
 
 type ApiHealthResult = { ok: boolean; name?: string; version?: string };
@@ -88,6 +91,9 @@ declare module "webext-bridge" {
     "debug-profile-storage": ProtocolWithReturn<null, unknown>;
     "debug-private-sync": ProtocolWithReturn<null, unknown>;
     "clear-private-sync-debug": ProtocolWithReturn<null, null>;
+    "snaplog-record": ProtocolWithReturn<SnaplogEntry, null>;
+    "snaplog-read": ProtocolWithReturn<null, SnaplogEntry[]>;
+    "snaplog-clear": ProtocolWithReturn<null, null>;
 
     "scan": ProtocolWithReturn<null, ScanResponse>;
     "fill": ProtocolWithReturn<{ mappings: FieldMapping[] }, FillResponse>;

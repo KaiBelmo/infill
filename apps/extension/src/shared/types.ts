@@ -1,5 +1,6 @@
 import type { AccountInfo, ExtractedForm, FieldMapping, ProfileCategory, ProfileFact, ProfileSyncAction, ProfileSyncConflict, ProfileSyncPreview, SessionInfo, Sensitivity, UserAccount } from "@infill/shared";
 import type { FillProfile } from "@infill/shared";
+import type { LlmBatchKeyMatchRequest, LlmBatchKeyMatchResponse } from "@infill/form-brain";
 
 // --- Cloud types (previously in background/cloud-store.ts, re-exported via background/cloud.ts) ---
 
@@ -11,8 +12,9 @@ export type CloudConfig = {
   ollamaBaseUrl: string;
   ollamaModel: string;
   ollamaModelOptions: string[];
+  ollamaTimeout: number;
   localOllamaFallbackToCloud: boolean;
-  developerModeEnabled?: boolean;
+  enableLlmKeyMatcherFallback: boolean;
 };
 
 export type CloudAuthState = {
@@ -41,7 +43,7 @@ export type FactDraft = {
   id?: string;
   key: string;
   label: string;
-  value: string;
+  value: ProfileFact["value"];
   category: ProfileCategory;
   sensitivity: Sensitivity;
   source?: ProfileFact["source"];
@@ -209,6 +211,19 @@ export type ScanDebugField = {
   matchRejectedReason?: string;
 };
 
+export type LlmKeyMatcherDebug = {
+  enabled: boolean;
+  providerId: string;
+  model: string;
+  status: "success" | "skipped" | "error";
+  durationMs?: number;
+  reason?: string;
+  prompt?: string;
+  rawResponseText?: string;
+  request?: LlmBatchKeyMatchRequest;
+  response?: LlmBatchKeyMatchResponse;
+};
+
 export type ScanDebugState = {
   factCount: number;
   formCount: number;
@@ -220,6 +235,7 @@ export type ScanDebugState = {
   skippedFillCount: number;
   cloudAssistUsed: boolean;
   cloudAssistStatus: string;
+  llmKeyMatcher?: LlmKeyMatcherDebug;
   generatedAt: string;
   facts: ScanDebugFact[];
   forms: ScanDebugForm[];

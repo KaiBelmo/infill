@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { CloudState, DeviceInfo } from "@/shared/types";
-import { useCloudStore } from "@/background/cloud-store";
 import {
   createBillingCheckout,
   checkLocalOllama,
@@ -28,11 +27,11 @@ type CloudClientActions = {
   startOAuth: () => Promise<void>;
   openBilling: () => boolean;
   toggleCloudAssist: (enabled: boolean) => Promise<string>;
-  toggleDeveloperMode: (enabled: boolean) => Promise<string>;
   saveLocalOllamaConfig: (input: {
     localOllamaEnabled: boolean;
     ollamaBaseUrl: string;
     ollamaModel: string;
+    ollamaTimeout: number;
     localOllamaFallbackToCloud: boolean;
   }) => Promise<string>;
   detectLocalOllamaModels: (input: { baseUrl: string; model?: string }) => Promise<{
@@ -112,41 +111,40 @@ export const useCloudClientStore = create<CloudClientState & CloudClientActions>
     }
   },
 
-  async toggleDeveloperMode(enabled) {
-    try {
-      const next = await saveCloudConfig({ developerModeEnabled: enabled });
-      set(deriveCloudFlags(next));
-      const msg = enabled ? "Developer mode enabled." : "Developer mode disabled.";
-      set({ cloudMessage: msg });
-      return msg;
-    } catch (error) {
-      const msg = normalizeCloudMessage(error instanceof Error ? error.message : "Unable to update developer mode.");
-      set({ cloudMessage: msg });
-      return msg;
-    }
-  },
-
   async saveLocalOllamaConfig(input) {
     try {
-      if (input.localOllamaEnabled) {
-        const health = await checkLocalOllama({ baseUrl: input.ollamaBaseUrl, model: input.ollamaModel });
-        if (!health.ok) {
-          const next = await saveCloudConfig({ ...input, localOllamaEnabled: false });
-          set(deriveCloudFlags(next));
-          const msg = "Ollama is reachable, but no local models are installed. Pull a model, then save AI settings again.";
-          set({ cloudMessage: msg });
-          return msg;
-        }
+      if (!input.localOllamaEnabled) {
+        const next = await saveCloudConfig(input);
+        set(deriveCloudFlags(next));
+        const msg = "Local Ollama assist disabled.";
+        set({ cloudMessage: msg });
+        return msg;
       }
 
-      const next = await saveCloudConfig(input);
+      const health = await checkLocalOllama({ baseUrl: input.ollamaBaseUrl, model: input.ollamaModel });
+      if (!health.ok) {
+        const next = await saveCloudConfig({
+          ...input,
+          ollamaBaseUrl: health.baseUrl || input.ollamaBaseUrl,
+          ollamaModelOptions: health.models ?? []
+        });
+        set(deriveCloudFlags(next));
+        const msg = "Ollama is reachable, but no local models are installed. Pull a model, then save AI settings again.";
+        set({ cloudMessage: msg });
+        return msg;
+      }
+
+      const next = await saveCloudConfig({
+        ...input,
+        ollamaBaseUrl: health.baseUrl || input.ollamaBaseUrl,
+        ollamaModel: input.ollamaModel,
+        ollamaModelOptions: health.models
+      });
       set(deriveCloudFlags(next));
-      const msg = input.localOllamaEnabled ? "Local Ollama assist enabled." : "Local Ollama assist disabled.";
+      const msg = "Local Ollama assist enabled.";
       set({ cloudMessage: msg });
       return msg;
     } catch (error) {
-      const next = await saveCloudConfig({ ...input, localOllamaEnabled: false }).catch(() => undefined);
-      if (next) set(deriveCloudFlags(next));
       const msg = normalizeCloudMessage(error instanceof Error ? `Ollama is not reachable: ${error.message}` : "Ollama is not reachable. Check that Ollama is running, then save AI settings again.");
       set({ cloudMessage: msg });
       return msg;
@@ -292,15 +290,3 @@ export function normalizeCloudMessage(message: string): string {
   return trimmed;
 }
 
-// Cross-context sync: when another context writes to chrome.storage.local,
-// the cloud store already handles rehydration — we just need to read the latest.
-if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    const cloudStateChanged = areaName === "local" && "infillCloudState" in changes;
-    const cloudTokensChanged = areaName === "session" && "infillCloudSessionTokens" in changes;
-    if (!cloudStateChanged && !cloudTokensChanged) return;
-    // Re-derive from the updated cloud store
-    const latest = useCloudStore.getState().getCloudState();
-    useCloudClientStore.setState(deriveCloudFlags(latest));
-  });
-}

@@ -547,7 +547,7 @@ export const useProfileStore = create<StoredExtensionState & ProfileStoreActions
             }
             return;
           }
-          // No persisted state found — try legacy migration
+          // No persisted state found â€” try legacy migration
           const legacyFacts = await listProfileFacts().catch(() => []);
           const migrated = createDefaultState(legacyFacts.map((fact) => ProfileFactSchema.parse(fact)));
           useProfileStore.setState(migrated);
@@ -661,7 +661,7 @@ function upsertProfileFact(existingFacts: ProfileFact[], draft: FactDraft): Prof
       createProfileFact({
         key: normalizedKey,
         label: draft.label,
-        value: sanitizeFactStringValue(draft.value),
+        value: sanitizeFactValue(draft.value),
         category: draft.category,
         sensitivity: draft.sensitivity,
         source: draft.source,
@@ -675,7 +675,7 @@ function upsertProfileFact(existingFacts: ProfileFact[], draft: FactDraft): Prof
     ...existingFact,
     key: normalizedKey,
     label: draft.label.trim(),
-    value: sanitizeFactStringValue(draft.value),
+    value: sanitizeFactValue(draft.value),
     category: draft.category,
     sensitivity: draft.sensitivity,
     source: draft.source ?? existingFact.source,
@@ -808,7 +808,7 @@ function sanitizeStoredProfileState(state: StoredExtensionState): { state: Store
   const now = new Date().toISOString();
   const profiles = state.profiles.map((profile) => {
     const facts = profile.facts.map((fact) => {
-      const sanitizedValue = typeof fact.value === "string" ? sanitizeFactStringValue(fact.value) : fact.value;
+      const sanitizedValue = sanitizeFactValue(fact.value);
       const shouldRekeyInvalidContactFact = isInvalidContactFact(fact) && !isContactLabel(fact.label);
       const nextKey = shouldRekeyInvalidContactFact ? customKeyForLabel(fact.label) : fact.key;
       const nextCategory = shouldRekeyInvalidContactFact ? "custom" : fact.category;
@@ -841,8 +841,23 @@ function sanitizeStoredProfileState(state: StoredExtensionState): { state: Store
   };
 }
 
+function sanitizeFactValue(value: ProfileFact["value"]): ProfileFact["value"] {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const cleaned = sanitizeFactStringValue(value);
+  return isUnknownPlaceholderValue(cleaned) ? null : cleaned;
+}
+
 function sanitizeFactStringValue(value: string): string {
   return value.replace(/(?:\s*\[[^\]\r\n]{1,80}\]\s*)+$/g, "").trim();
+}
+
+function isUnknownPlaceholderValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase().replace(/[.\s_-]+$/g, "");
+  const words = normalized.split(/\s+/).filter(Boolean);
+  return words.length <= 8 && /\b(unknown|none|null|n\/a|na|not applicable|not provided|not specified|unspecified|missing|no answer|i don't know|i do not know|dont know|don't know)\b/i.test(normalized);
 }
 
 function undosMatch(left: LearnedFactUndo, right: LearnedFactUndo): boolean {
@@ -916,7 +931,7 @@ function shouldReplaceInvalidContactFact(
   const proposedFact = {
     ...existingFact,
     key: normalizeProfileKey(input.key),
-    value: sanitizeFactStringValue(input.value)
+    value: sanitizeFactValue(input.value)
   };
 
   return !isInvalidContactFact(proposedFact);

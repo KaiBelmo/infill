@@ -24,8 +24,9 @@ function defaultConfig(): CloudConfig {
     ollamaBaseUrl: "http://localhost:11434/v1",
     ollamaModel: "llama3.1",
     ollamaModelOptions: [],
+    ollamaTimeout: 60,
     localOllamaFallbackToCloud: false,
-    developerModeEnabled: false
+    enableLlmKeyMatcherFallback: true
   };
 }
 
@@ -63,7 +64,7 @@ function chromeSessionStorageAdapter() {
   };
 }
 
-// Separate tiny store for session tokens — persisted to chrome.storage.session
+// Separate tiny store for session tokens â€” persisted to chrome.storage.session
 // (in-memory, not written to disk, not readable by other extensions)
 export const useSessionTokenStore = create<{ sessionToken: string; refreshToken: string }>()(
   persist(
@@ -88,7 +89,10 @@ export const useCloudStore = create<CloudState & CloudStoreActions>()(
         const { config, auth } = get();
         const tokens = useSessionTokenStore.getState();
         return {
-          config,
+          config: {
+            ...defaultConfig(),
+            ...config
+          },
           auth: auth
             ? { ...auth, sessionToken: tokens.sessionToken || auth.sessionToken, refreshToken: tokens.refreshToken || auth.refreshToken }
             : undefined
@@ -105,19 +109,19 @@ export const useCloudStore = create<CloudState & CloudStoreActions>()(
           ollamaBaseUrl: validateOllamaBaseUrl(trimBaseUrl(input.ollamaBaseUrl ?? current.ollamaBaseUrl)),
           ollamaModel: (input.ollamaModel ?? current.ollamaModel).trim() || defaultConfig().ollamaModel,
           ollamaModelOptions: sanitizeOllamaModelOptions(input.ollamaModelOptions ?? current.ollamaModelOptions),
-          developerModeEnabled: input.developerModeEnabled ?? current.developerModeEnabled
+          ollamaTimeout: Math.max(1, input.ollamaTimeout ?? current.ollamaTimeout ?? 60)
         };
         set({ config: next });
         return get().getCloudState();
       },
 
       persistAuth(auth: CloudAuthState): void {
-        // Tokens → session storage (in-memory only)
+        // Tokens â†’ session storage (in-memory only)
         useSessionTokenStore.setState({
           sessionToken: auth.sessionToken,
           refreshToken: auth.refreshToken
         });
-        // Auth metadata → local storage WITHOUT plaintext tokens
+        // Auth metadata â†’ local storage WITHOUT plaintext tokens
         const { sessionToken: _, refreshToken: __, ...authWithoutTokens } = auth;
         set({ auth: { ...authWithoutTokens, sessionToken: "", refreshToken: "" } });
       },
@@ -146,15 +150,21 @@ export const useCloudStore = create<CloudState & CloudStoreActions>()(
         }
         if (version === 0) {
           // v0 had config/auth as separate top-level keys inside the persisted blob
-          // v1 uses { config, auth } shape — same shape, just bump to trigger onRehydrateStorage
+          // v1 uses { config, auth } shape â€” same shape, just bump to trigger onRehydrateStorage
           return persistedState as CloudState;
         }
-        return persistedState as CloudState;
+        return {
+          ...state,
+          config: {
+            ...defaultConfig(),
+            ...(state.config ?? {})
+          }
+        } satisfies CloudState;
       },
       onRehydrateStorage: () => {
         return async (state, error) => {
           if (error || state) return;
-          // No persisted state found under new key — try legacy migration
+          // No persisted state found under new key â€” try legacy migration
           const legacy = await chrome.storage.local.get([LEGACY_CONFIG_KEY, LEGACY_AUTH_KEY]);
           const legacyConfig = legacy[LEGACY_CONFIG_KEY] as CloudConfig | undefined;
           const legacyAuth = legacy[LEGACY_AUTH_KEY] as Omit<CloudAuthState, "sessionToken" | "refreshToken"> & { sessionToken: string; refreshToken: string } | undefined;
@@ -230,3 +240,4 @@ export function validateOllamaBaseUrl(value: string): string {
   url.search = "";
   return url.toString().replace(/\/$/, "");
 }
+

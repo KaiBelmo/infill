@@ -26,19 +26,3 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local" || !("infillExtensionProfileState" in changes)) return;
   updateConflictBadge();
 });
-
-import { useCloudStore } from "./cloud-store";
-import { qaDummyFillTab } from "./scan";
-
-chrome.commands.onCommand.addListener(async (command) => {
-  if (command === "qa-dummy-fill") {
-    const config = useCloudStore.getState().config;
-    if (config.developerModeEnabled) {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id && tab.url) {
-        await qaDummyFillTab(tab.id, tab.url);
-      }
-    }
-  }
-});
-

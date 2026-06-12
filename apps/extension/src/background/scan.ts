@@ -1,14 +1,16 @@
-import { mapFieldsToProfile, scoreFieldMatch, generateDummyDataForField } from "@infill/form-brain";
+import { mapFieldsToProfile, scoreFieldMatch } from "@infill/form-brain";
+import type { ProfileFactResolverOptions } from "@infill/form-brain";
 import type { CloudAssistRequest, ExtractedForm, FieldMapping, ProfileFact, Sensitivity } from "@infill/shared";
 import { toPublicExtensionState, useProfileStore } from "./profile-store";
 import { useScanStore } from "./scan-store";
 import { runCloudAssist } from "./cloud-assist";
 import { runLocalAssist } from "./local-assist";
+import { buildLlmKeyMatcherResolverOptions } from "./llm-key-matcher";
 import { useCloudStore } from "./cloud-store";
 import { sendMessage } from "webext-bridge/background";
 import { canToggleMappingValue } from "@/popup/utils/mapping-display";
-import type { ScanDebugState, ScanStatus } from "@/shared/types";
-import { debugLog, debugWarn } from "@/shared/debug-log";
+import type { LlmKeyMatcherDebug, ScanDebugState, ScanStatus } from "@/shared/types";
+import { debugLog, debugWarn, injectDebugLog } from "@/shared/debug-log";
 
 const MESSAGE_TIMEOUT_MS = 8_000;
 
@@ -96,7 +98,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   debugLog("[scanTab] START tabId=", tabId, "url=", tabUrl);
 
   if (isUnsupportedUrl(tabUrl)) {
-    debugLog("[scanTab] Blocked â€” unsupported URL");
+    debugLog("[scanTab] Blocked Ã¢â‚¬â€ unsupported URL");
     store.setScanState({
       status: "Blocked",
       error: "This page cannot be scanned.",
@@ -121,8 +123,22 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
     debug: undefined,
   });
 
-  const facts = toPublicExtensionState(useProfileStore.getState()).facts;
+  await ensureProfileStoreHydrated();
+  const profileState = useProfileStore.getState();
+  const publicProfileState = toPublicExtensionState(profileState);
+  const facts = publicProfileState.facts;
   debugLog("[scanTab] facts count=", facts.length);
+  injectDebugLog({
+    activeProfileId: publicProfileState.activeProfileId,
+    profileCount: profileState.profiles.length,
+    profileFactCounts: profileState.profiles.map((profile) => ({
+      id: profile.id,
+      name: profile.name,
+      factCount: profile.facts.length
+    })),
+    scanFactCount: facts.length,
+    scanFactKeys: facts.map((fact) => fact.key)
+  }, "background/scanTab/profileFacts");
   let allForms: ExtractedForm[] = [];
 
   // Scan main frame
@@ -130,7 +146,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   const loaded = await ensureContentScript(tabId);
   debugLog("[scanTab] ensureContentScript result=", loaded);
   if (!loaded) {
-    debugLog("[scanTab] ERROR â€” content script could not load");
+    debugLog("[scanTab] ERROR Ã¢â‚¬â€ content script could not load");
     store.setScanState({
       status: "Error",
       error: "Could not load content script on this page.",
@@ -204,8 +220,12 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   }
 
   debugLog("[scanTab] total allForms=", allForms.length, "total fields=", allForms.reduce((s, f) => s + f.fields.length, 0));
+  injectDebugLog({
+    scanFormCount: allForms.length,
+    scanFieldCount: allForms.reduce((sum, form) => sum + form.fields.length, 0)
+  }, "background/scanTab");
   if (allForms.length === 0 || allForms.every((form) => form.fields.length === 0)) {
-    debugLog("[scanTab] Blocked â€” no visible/enabled fields");
+    debugLog("[scanTab] Blocked Ã¢â‚¬â€ no visible/enabled fields");
     store.setScanState({
       status: "Blocked",
       error: "No visible or enabled form fields were detected on this page.",
@@ -219,17 +239,8 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
     return;
   }
 
-  // Map fields to profile facts
-  debugLog("[scanTab] mapping fields to profile facts...");
-  debugLog("[scanTab] profile facts keys=", facts.map((f) => `${f.key}=${String(f.value).slice(0, 30)}`).join(", "));
-  let nextMappings = allForms.flatMap((form) => mapFieldsToProfile(form.fields, facts));
-  debugLog("[scanTab] local mappings count=", nextMappings.length);
-  for (const m of nextMappings) {
-    debugLog(`[scanTab] field=${m.fieldId} key=${m.profileKey} source=${m.valueSource} value=${String(m.value ?? "").slice(0, 50)} preselected=${m.preselected} reason=${m.reason} usedFactIds=${(m.usedFactIds ?? []).join(",") || "none"} warnings=${(m.warnings ?? []).join("|") || "none"}`);
-  }
-
-  // AI assist
   const cloudState = useCloudStore.getState().getCloudState();
+  const allFields = allForms.flatMap((form) => form.fields);
   const canUseCloudAssist = cloudState.auth?.account.subscription.plan === "pro" &&
     (
       cloudState.auth.account.subscription.status === "active" ||
@@ -239,6 +250,39 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
     cloudState.config.cloudAssistEnabled && cloudState.auth?.sessionToken && canUseCloudAssist
   );
   const shouldUseLocalAssist = Boolean(cloudState.config.localOllamaEnabled);
+  let llmKeyMatcherDebug: LlmKeyMatcherDebug | undefined;
+  let resolverOptions: ProfileFactResolverOptions = {};
+  if (cloudState.config.enableLlmKeyMatcherFallback && (shouldUseLocalAssist || shouldUseCloudAssist)) {
+    const keyMatcherProvider = shouldUseCloudAssist ? "cloud" : "ollama";
+    debugLog("[scanTab] building LLM key matcher resolver options...", keyMatcherProvider);
+    const keyMatcher = await buildLlmKeyMatcherResolverOptions(allFields, facts, keyMatcherProvider);
+    resolverOptions = keyMatcher?.resolverOptions ?? {};
+    llmKeyMatcherDebug = keyMatcher?.debug;
+    if (llmKeyMatcherDebug?.status === "error") {
+      debugWarn("[scanTab] LLM key matcher FAILED:", llmKeyMatcherDebug.reason);
+    }
+  } else {
+    llmKeyMatcherDebug = {
+      enabled: Boolean(cloudState.config.enableLlmKeyMatcherFallback),
+      providerId: shouldUseCloudAssist ? "cloud" : "ollama",
+      model: shouldUseCloudAssist ? "managed-cloud" : cloudState.config.ollamaModel,
+      status: "skipped",
+      reason: cloudState.config.enableLlmKeyMatcherFallback
+        ? "No LLM key matcher provider is enabled."
+        : "LLM key matcher fallback is disabled."
+    };
+  }
+
+  // Map fields to profile facts
+  debugLog("[scanTab] mapping fields to profile facts...");
+  debugLog("[scanTab] profile facts keys=", facts.map((f) => `${f.key}=${String(f.value).slice(0, 30)}`).join(", "));
+  let nextMappings = allForms.flatMap((form) => mapFieldsToProfile(form.fields, facts, resolverOptions));
+  debugLog("[scanTab] local mappings count=", nextMappings.length);
+  for (const m of nextMappings) {
+    debugLog(`[scanTab] field=${m.fieldId} key=${m.profileKey} source=${m.valueSource} value=${String(m.value ?? "").slice(0, 50)} preselected=${m.preselected} reason=${m.reason} usedFactIds=${(m.usedFactIds ?? []).join(",") || "none"} warnings=${(m.warnings ?? []).join("|") || "none"}`);
+  }
+
+  // AI assist
   debugLog("[scanTab] localOllamaEnabled=", shouldUseLocalAssist, "cloudAssistEnabled=", cloudState.config.cloudAssistEnabled, "hasSession=", Boolean(cloudState.auth?.sessionToken), "canUseCloud=", canUseCloudAssist, "shouldUseCloud=", shouldUseCloudAssist);
 
   let assistStatusSuffix = "";
@@ -296,7 +340,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
       ? "Review fill"
       : "Blocked";
 
-  debugLog("[scanTab] DONE — finalStatus=", finalStatus, "mappings=", nextMappings.length);
+  debugLog("[scanTab] DONE Ã¢â‚¬â€ finalStatus=", finalStatus, "mappings=", nextMappings.length);
   const finalMappings = nextMappings.map(normalizeReviewMapping);
   const scannedAt = new Date().toISOString();
   const initialDebug = buildScanDebug({
@@ -305,6 +349,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
     facts,
     cloudAssistUsed: assistUsed,
     cloudAssistStatus: assistStatusSuffix || "Local mapping",
+    llmKeyMatcher: llmKeyMatcherDebug,
     generatedAt: scannedAt
   });
   store.setScanState({
@@ -326,6 +371,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
         facts,
         cloudAssistUsed: assistUsed,
         cloudAssistStatus: assistStatusSuffix || "Local mapping",
+        llmKeyMatcher: llmKeyMatcherDebug,
         generatedAt: new Date().toISOString(),
         fillDebug
       })
@@ -380,6 +426,21 @@ export async function autoFillAndOverlay(tabId: number, forms: ExtractedForm[], 
   return { filledFieldIds, skippedFields };
 }
 
+async function ensureProfileStoreHydrated(): Promise<void> {
+  const persistApi = (useProfileStore as typeof useProfileStore & {
+    persist?: {
+      hasHydrated?: () => boolean;
+      rehydrate?: () => Promise<void>;
+    };
+  }).persist;
+
+  if (!persistApi?.rehydrate || persistApi.hasHydrated?.()) {
+    return;
+  }
+
+  await persistApi.rehydrate();
+}
+
 export async function removeOverlays(tabId: number): Promise<void> {
   await ensureContentScript(tabId);
   await withTimeout(sendMessage("remove-overlays", null, { context: "content-script", tabId }));
@@ -399,6 +460,7 @@ function buildScanDebug(input: {
   facts: ProfileFact[];
   cloudAssistUsed: boolean;
   cloudAssistStatus: string;
+  llmKeyMatcher?: LlmKeyMatcherDebug;
   generatedAt: string;
   fillDebug?: AutoFillDebugResult;
 }): ScanDebugState {
@@ -420,6 +482,7 @@ function buildScanDebug(input: {
     skippedFillCount: skippedByField.size,
     cloudAssistUsed: input.cloudAssistUsed,
     cloudAssistStatus: input.cloudAssistStatus,
+    llmKeyMatcher: input.llmKeyMatcher,
     generatedAt: input.generatedAt,
     facts: input.facts.map(toDebugFact),
     forms: input.forms.map(toDebugForm),
@@ -582,98 +645,3 @@ function previewText(value: unknown, maxLength: number): string {
       : String(value ?? "");
   return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
 }
-
-export async function qaDummyFillTab(tabId: number, tabUrl: string): Promise<void> {
-  debugLog("[qaDummyFillTab] START tabId=", tabId, "url=", tabUrl);
-
-  if (isUnsupportedUrl(tabUrl)) {
-    return;
-  }
-
-  let allForms: ExtractedForm[] = [];
-
-  const loaded = await ensureContentScript(tabId);
-  if (!loaded) return;
-
-  const response = await withTimeout(sendMessage("scan", null, { context: "content-script", tabId }));
-  if (response) {
-    allForms = [...allForms, ...response.forms];
-  }
-
-  try {
-    const frameResults = await chrome.webNavigation.getAllFrames({ tabId });
-    if (frameResults) {
-      const iframeIds = frameResults
-        .filter((frame) => frame.frameId !== 0)
-        .map((frame) => frame.frameId);
-
-      for (const frameId of iframeIds) {
-        let frameResponse = await withTimeout(
-          sendMessage("scan", null, { context: "content-script", tabId, frameId })
-        );
-
-        if (!frameResponse) {
-          try {
-            await chrome.scripting.executeScript({
-              target: { tabId, frameIds: [frameId] },
-              files: getContentScriptFiles(),
-            });
-          } catch (injectErr) {
-            // ignore
-          }
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          frameResponse = await withTimeout(
-            sendMessage("scan", null, { context: "content-script", tabId, frameId })
-          );
-        }
-
-        if (frameResponse) {
-          const taggedForms = frameResponse.forms.map((form: ExtractedForm) => ({
-            ...form,
-            formId: `frame_${frameId}_${form.formId}`,
-            fields: form.fields.map((field) => ({
-              ...field,
-              frameId: String(frameId),
-            })),
-          }));
-          allForms = [...allForms, ...taggedForms];
-        }
-      }
-    }
-  } catch (scanError) {
-    debugWarn("[qaDummyFillTab] iframe scanning not available:", scanError);
-  }
-
-  if (allForms.length === 0) return;
-
-  const mappings: FieldMapping[] = allForms.flatMap((form) =>
-    form.fields
-      .filter((f) => f.isVisible && !f.disabled && !f.readOnly)
-      .map((field) => ({
-        fieldId: field.fieldId,
-        profileKey: "qa.dummy",
-        value: generateDummyDataForField(field),
-        valueSource: "manual",
-        confidence: 1.0,
-        risk: "safe",
-        preselected: true,
-        requiresExplicitApproval: false,
-        reason: "QA Dummy Fill",
-        usedFactIds: []
-      }))
-  );
-
-  const byFrame = new Map<string | undefined, FieldMapping[]>();
-  for (const mapping of mappings) {
-    const field = allForms.flatMap((form) => form.fields).find((item) => item.fieldId === mapping.fieldId);
-    const frameId = field?.frameId;
-    byFrame.set(frameId, [...(byFrame.get(frameId) ?? []), mapping]);
-  }
-
-  for (const [frameId, frameMappings] of byFrame) {
-    const destination = frameId
-      ? { context: "content-script" as const, tabId, frameId: Number(frameId) }
-      : { context: "content-script" as const, tabId };
-    await withTimeout(sendMessage("fill", { mappings: frameMappings }, destination));
-  }
-}

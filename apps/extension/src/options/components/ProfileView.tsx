@@ -48,11 +48,11 @@ type ProfileViewProps = {
   unlockEncryptedSync: (passphrase: string) => Promise<void>;
   lockEncryptedSync: () => Promise<void>;
   toggleCloudAssist: (enabled: boolean) => Promise<string | void>;
-  toggleDeveloperMode: (enabled: boolean) => Promise<string | void>;
   saveLocalOllamaConfig: (input: {
     localOllamaEnabled: boolean;
     ollamaBaseUrl: string;
     ollamaModel: string;
+    ollamaTimeout: number;
     localOllamaFallbackToCloud: boolean;
   }) => Promise<string>;
   detectLocalOllamaModels: (input: { baseUrl: string; model?: string }) => Promise<{
@@ -110,7 +110,6 @@ function ProfileViewComponent(props: ProfileViewProps) {
     unlockEncryptedSync,
     lockEncryptedSync,
     toggleCloudAssist,
-    toggleDeveloperMode,
     saveLocalOllamaConfig,
     detectLocalOllamaModels,
     refreshSessionState,
@@ -127,6 +126,7 @@ function ProfileViewComponent(props: ProfileViewProps) {
   const [localOllamaEnabled, setLocalOllamaEnabled] = useState(false);
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState("http://localhost:11434/v1");
   const [ollamaModel, setOllamaModel] = useState("llama3.1");
+  const [ollamaTimeout, setOllamaTimeout] = useState(60);
   const [detectedOllamaModels, setDetectedOllamaModels] = useState<string[]>([]);
   const [detectingOllamaModels, setDetectingOllamaModels] = useState(false);
   const [localOllamaFallbackToCloud] = useState(false);
@@ -156,11 +156,14 @@ function ProfileViewComponent(props: ProfileViewProps) {
     setOllamaModel((current) => (
       current === cloudConfig.ollamaModel ? current : cloudConfig.ollamaModel
     ));
+    setOllamaTimeout((current) => (
+      current === (cloudConfig.ollamaTimeout ?? 60) ? current : (cloudConfig.ollamaTimeout ?? 60)
+    ));
     setDetectedOllamaModels((current) => {
       const next = cloudConfig.ollamaModelOptions ?? [];
       return current.length === next.length && current.every((item, index) => item === next[index]) ? current : next;
     });
-  }, [cloudConfig?.localOllamaEnabled, cloudConfig?.ollamaBaseUrl, cloudConfig?.ollamaModel, cloudConfig?.ollamaModelOptions]);
+  }, [cloudConfig?.localOllamaEnabled, cloudConfig?.ollamaBaseUrl, cloudConfig?.ollamaModel, cloudConfig?.ollamaModelOptions, cloudConfig?.ollamaTimeout]);
 
   useEffect(() => {
     if (!dialog) return;
@@ -203,18 +206,28 @@ function ProfileViewComponent(props: ProfileViewProps) {
   }, []);
 
   const saveOllamaSettings = useCallback(async () => {
-    const message = await saveLocalOllamaConfig({
+    const input = {
       localOllamaEnabled,
       ollamaBaseUrl,
       ollamaModel,
+      ollamaTimeout,
       localOllamaFallbackToCloud
+    };
+    const message = await saveLocalOllamaConfig({
+      localOllamaEnabled: input.localOllamaEnabled,
+      ollamaBaseUrl: input.ollamaBaseUrl,
+      ollamaModel: input.ollamaModel,
+      ollamaTimeout: input.ollamaTimeout,
+      localOllamaFallbackToCloud: input.localOllamaFallbackToCloud
     });
     setStatus(message);
   }, [
+    cloudConfig,
     localOllamaEnabled,
     localOllamaFallbackToCloud,
     ollamaBaseUrl,
     ollamaModel,
+    ollamaTimeout,
     saveLocalOllamaConfig,
     setStatus
   ]);
@@ -239,16 +252,34 @@ function ProfileViewComponent(props: ProfileViewProps) {
     }
   }, [detectLocalOllamaModels, ollamaBaseUrl, ollamaModel, setStatus]);
 
+  const changeLocalOllamaPreference = useCallback((enabled: boolean) => {
+    setLocalOllamaEnabled(enabled);
+
+    const input = {
+      localOllamaEnabled: enabled,
+      ollamaBaseUrl,
+      ollamaModel,
+      ollamaTimeout,
+      localOllamaFallbackToCloud
+    };
+    void saveLocalOllamaConfig(input).then((message) => {
+      setStatus(message);
+    });
+  }, [
+    cloudConfig,
+    localOllamaEnabled,
+    localOllamaFallbackToCloud,
+    ollamaBaseUrl,
+    ollamaModel,
+    ollamaTimeout,
+    saveLocalOllamaConfig,
+    setStatus
+  ]);
+
   const toggleCloudAssistAndReport = useCallback(async () => {
     const message = await toggleCloudAssist(!cloudAssistEnabled);
     if (message) setStatus(message);
   }, [cloudAssistEnabled, setStatus, toggleCloudAssist]);
-
-  const toggleDeveloperModeAndReport = useCallback(async () => {
-    const isCurrentlyEnabled = cloudConfig?.developerModeEnabled ?? false;
-    const message = await toggleDeveloperMode(!isCurrentlyEnabled);
-    if (message) setStatus(message);
-  }, [cloudConfig?.developerModeEnabled, setStatus, toggleDeveloperMode]);
 
   const openCheckoutAndReport = useCallback(async () => {
     const message = await openCheckout();
@@ -515,7 +546,7 @@ function ProfileViewComponent(props: ProfileViewProps) {
                 <p className="m-0 mt-2 text-sm leading-6 text-[var(--color-ink-soft)]">Local Ollama: {localOllamaEnabled ? "Enabled" : "Disabled"}</p>
               </div>
               <label className="flex items-start gap-3 text-sm leading-6 text-[var(--color-ink-soft)]">
-                <input className="mt-1" type="checkbox" checked={localOllamaEnabled} onChange={(event) => setLocalOllamaEnabled(event.target.checked)} />
+                <input className="mt-1" type="checkbox" checked={localOllamaEnabled} onChange={(event) => changeLocalOllamaPreference(event.target.checked)} />
                 <span>{canUseCloud ? "Use local Ollama instead of cloud AI" : "Enable local Ollama on this device"}</span>
               </label>
               {!canUseCloud ? <OptionsNotice>Use local Ollama without signing in. Cloud assist stays off until a qualifying plan is active.</OptionsNotice> : null}
@@ -534,12 +565,33 @@ function ProfileViewComponent(props: ProfileViewProps) {
                   <label className="grid gap-2">
                     <span className="text-sm font-semibold text-[var(--color-ink)]">Ollama model</span>
                     {detectedOllamaModels.length > 0 ? (
-                      <select className={inputClassSm} value={ollamaModel} onChange={(event) => setOllamaModel(event.target.value)}>
+                      <select className={inputClassSm} value={ollamaModel} onChange={(event) => {
+                        setOllamaModel(event.target.value);
+                      }}>
                         {detectedOllamaModels.map((model) => <option key={model} value={model}>{model}</option>)}
                       </select>
                     ) : (
-                      <input className={inputClassSm} value={ollamaModel} onChange={(event) => setOllamaModel(event.target.value)} />
+                      <input className={inputClassSm} value={ollamaModel} onChange={(event) => {
+                        setOllamaModel(event.target.value);
+                      }} />
                     )}
+                  </label>
+                  <label className="grid gap-2">
+                    <span className="text-sm font-semibold text-[var(--color-ink)]">Request timeout (seconds)</span>
+                    <input
+                      className={inputClassSm}
+                      id="ollama-timeout"
+                      type="number"
+                      min={5}
+                      max={300}
+                      step={5}
+                      value={ollamaTimeout}
+                      onChange={(event) => {
+                        const v = parseInt(event.target.value, 10);
+                        if (!isNaN(v)) setOllamaTimeout(Math.max(5, Math.min(300, v)));
+                      }}
+                    />
+                    <span className="text-xs text-[var(--color-ink-muted)]">How long to wait for a local model response (5â€“300 s). Increase for slower machines or larger models.</span>
                   </label>
                   <button className={primaryButtonClass} type="button" onClick={saveOllamaSettings}>Save AI settings</button>
                 </div>
@@ -649,16 +701,9 @@ function ProfileViewComponent(props: ProfileViewProps) {
                 <div className="grid gap-4">
                   <div>
                     <span className={sectionHeadingLabelClass}>Advanced</span>
-                    <h3 className={`${sectionHeadingTitleClass} m-0 mt-1`}>Settings</h3>
+                    <h3 className={`${sectionHeadingTitleClass} m-0 mt-1`}>Session</h3>
                   </div>
-                  <label className="flex items-start gap-3 text-sm leading-6 text-[var(--color-ink-soft)]">
-                    <input className="mt-1" type="checkbox" checked={cloudConfig?.developerModeEnabled ?? false} onChange={toggleDeveloperModeAndReport} />
-                    <span>Developer Mode (Enables QA Dummy Fill)</span>
-                  </label>
-                  <div className={dividerClass}>
-                    <h4 className="m-0 mb-3 text-sm font-semibold text-[var(--color-ink)]">Session</h4>
-                    <button className={secondaryButtonClassMd} type="button" onClick={refreshSessionAndReport} disabled={!cloudState?.auth?.refreshToken}>Refresh session</button>
-                  </div>
+                  <button className={secondaryButtonClassMd} type="button" onClick={refreshSessionAndReport} disabled={!cloudState?.auth?.refreshToken}>Refresh session</button>
                   <div className={dividerClass}>
                     <h4 className="m-0 mb-3 text-sm font-semibold text-[var(--color-danger)]">Danger zone</h4>
                     <button className={dangerButtonClass} type="button" onClick={(event) => confirmFor("disconnect", event.currentTarget)}>Disconnect</button>
@@ -853,3 +898,4 @@ function sensitivityChipClass(sensitivity: Sensitivity): string {
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString();
 }
+

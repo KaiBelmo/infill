@@ -6,6 +6,7 @@ const now = "2026-05-26T00:00:00.000Z";
 const syncEncryptedProfilesIfUnlocked = vi.fn();
 const unlockEncryptedSync = vi.fn();
 const enableEncryptedSync = vi.fn();
+const runCloudParseProfile = vi.fn();
 const deleteLocalFact = vi.fn();
 const restoreLocalFact = vi.fn();
 const getEncryptionState = vi.fn();
@@ -25,7 +26,7 @@ let profileState: {
 };
 
 vi.mock("@/cloudClient", () => ({
-  runCloudParseProfile: vi.fn(),
+  runCloudParseProfile,
   applyProfileSyncDecision: vi.fn(),
   prepareProfileSync: vi.fn(),
   resolveProfileSyncConflict: vi.fn(),
@@ -44,7 +45,19 @@ vi.mock("@/background/sync-encryption-store", () => ({
 
 vi.mock("@/shared/stores/cloud-client-store", () => ({
   useCloudClientStore: {
-    getState: () => ({ cloudState: { auth: { sessionToken: "session-token" } } })
+    getState: () => ({
+      cloudState: {
+        auth: {
+          sessionToken: "session-token",
+          account: {
+            subscription: {
+              plan: "pro",
+              status: "active"
+            }
+          }
+        }
+      }
+    })
   }
 }));
 
@@ -65,6 +78,7 @@ describe("options profile fact removal", () => {
     vi.resetModules();
     vi.clearAllMocks();
     syncEncryptedProfilesIfUnlocked.mockResolvedValue(true);
+    runCloudParseProfile.mockReset();
     unlockEncryptedSync.mockResolvedValue(undefined);
     enableEncryptedSync.mockResolvedValue(undefined);
     getEncryptionState.mockReturnValue({ enabled: true, unlocked: false });
@@ -170,6 +184,73 @@ describe("options profile fact removal", () => {
   });
 });
 
+describe("options memory review confidence", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    vi.clearAllMocks();
+    profileState = {
+      activeProfileId: "profile-1",
+      profiles: [profile("profile-1", [])]
+    };
+    runCloudParseProfile.mockReset();
+  });
+
+  it("keeps low and missing confidence facts unchecked during review", async () => {
+    const { useOptionsStore } = await import("./options-store");
+
+    useOptionsStore.getState().setMemoryText([
+      "Full name: Kai Belmo [fact] [confidence: high]",
+      "Work style: Direct and iterative [inference] [confidence: medium]",
+      "Speculation blind spot: Overbuilding workflows [speculation] [confidence: low]",
+      "Unknown linkedin exact URL: What exact LinkedIn profile URL should be saved? [unknown] [confidence: missing]"
+    ].join("\n"));
+    useOptionsStore.getState().reviewMemory();
+
+    expect(useOptionsStore.getState().detectedFacts.map((fact) => ({
+      label: fact.label,
+      value: fact.value,
+      confidence: fact.confidence,
+      approved: fact.approved
+    }))).toEqual([
+      { label: "Full name", value: "Kai Belmo", confidence: "high", approved: true },
+      { label: "Work style", value: "Direct and iterative", confidence: "medium", approved: true },
+      { label: "Speculation blind spot", value: "Overbuilding workflows", confidence: "low", approved: false },
+      { label: "Unknown linkedin exact URL", value: null, confidence: "missing", approved: false }
+    ]);
+  });
+
+  it("surfaces cloud parser fallback warnings and keeps locally parsed facts reviewable", async () => {
+    runCloudParseProfile.mockResolvedValue({
+      fields: [],
+      source: "local_fallback",
+      warnings: ["Cloud assist is unavailable. Profile parsing requires an LLM."],
+      credits: {
+        monthlyLimit: 100,
+        usedThisPeriod: 0,
+        remaining: 100,
+        resetAt: null
+      }
+    });
+
+    const { useOptionsStore } = await import("./options-store");
+
+    useOptionsStore.getState().setMemoryText("Full name: Kai Belmo [fact] [confidence: high]");
+    await useOptionsStore.getState().reviewMemoryWithLlm();
+
+    expect(useOptionsStore.getState().status).toBe(
+      "Cloud AI could not parse profile fields: Cloud assist is unavailable. Profile parsing requires an LLM. 1 facts found by local review."
+    );
+    expect(useOptionsStore.getState().detectedFacts).toMatchObject([
+      {
+        label: "Full name",
+        value: "Kai Belmo",
+        approved: true
+      }
+    ]);
+  });
+});
+
 function fact(id: string, label: string, value: string): ProfileFact {
   return {
     id,
@@ -182,6 +263,19 @@ function fact(id: string, label: string, value: string): ProfileFact {
     verified: true,
     confidence: 1,
     sourceRefs: [],
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function profile(id: string, facts: ProfileFact[]) {
+  return {
+    id,
+    name: "Personal",
+    type: "personal",
+    isDefault: true,
+    locked: false,
+    facts,
     createdAt: now,
     updatedAt: now
   };

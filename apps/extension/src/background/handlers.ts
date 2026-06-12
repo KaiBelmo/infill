@@ -17,10 +17,12 @@ import {
 import { startAuthFlow } from "./auth";
 import { applyProfileSyncDecision, enableEncryptedProfileSync, prepareProfileSyncAfterAuth, resolveProfileSyncConflict, syncEncryptedProfilesIfUnlocked, unlockEncryptedProfileSync } from "./profile-sync";
 import { LOCAL_PROFILE_STATE_KEY, persistProfileStoreNow, useProfileStore } from "./profile-store";
-import { scanTab, getScanState, qaDummyFillTab } from "./scan";
+import { scanTab, getScanState } from "./scan";
 import { useScanStore } from "./scan-store";
 import { useSyncEncryptionStore } from "./sync-encryption-store";
 import { clearPrivateSyncDebug, getPrivateSyncDebug } from "./private-sync-debug";
+import { clearSnaplogEntries, readSnaplogEntries, recordSnaplogEntry } from "./snaplog";
+import type { SnaplogEntry } from "@infill/snaplog";
 
 onMessage("learn-fact", async ({ data: { fact } }) => {
   console.log("[learn-fact] request", {
@@ -199,12 +201,6 @@ onMessage("get-scan-state", async () => {
   return await getScanState();
 });
 
-onMessage("qa-dummy-fill", async ({ data }) => {
-  const { tabId, tabUrl } = data as { tabId: number; tabUrl: string };
-  await qaDummyFillTab(tabId, tabUrl);
-  return null;
-});
-
 onMessage("debug-profile-facts", () => {
   const state = useProfileStore.getState();
   const activeProfile = state.profiles.find((profile) => profile.id === state.activeProfileId);
@@ -278,6 +274,30 @@ onMessage("debug-private-sync", async () => {
 onMessage("clear-private-sync-debug", async () => {
   await clearPrivateSyncDebug();
   return null;
+});
+
+onMessage("snaplog-record", async ({ data }) => {
+  await recordSnaplogEntry(data as SnaplogEntry);
+  return null;
+});
+
+onMessage("snaplog-read", async () => {
+  return await readSnaplogEntries();
+});
+
+onMessage("snaplog-clear", async () => {
+  await clearSnaplogEntries();
+  return null;
+});
+
+chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
+  if (!message || typeof message !== "object" || !("type" in message)) return false;
+  const typed = message as { type?: string; entry?: SnaplogEntry };
+  if (typed.type !== "snaplog-record" || !typed.entry) return false;
+  recordSnaplogEntry(typed.entry)
+    .then(() => sendResponse({ ok: true }))
+    .catch(() => sendResponse({ ok: false }));
+  return true;
 });
 
 onMessage("auth-start", async () => {

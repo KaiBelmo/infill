@@ -36,14 +36,14 @@ export async function fillApprovedFields(mappings: FieldMapping[], forms: Extrac
       continue;
     }
 
-    if (mapping.value === undefined || !mapping.preselected) {
+    if (!isFillableMappingValue(mapping.value) || !mapping.preselected) {
       console.debug("[infill fill] skipped not ready", {
         ...toFillDebugMapping(mapping),
-        hasValue: mapping.value !== undefined,
+        hasValue: mapping.value !== undefined && mapping.value !== null,
         preselected: mapping.preselected
       });
       skippedFieldIds.push(mapping.fieldId);
-      skippedFields.push({ fieldId: mapping.fieldId, reason: "No value assigned or not preselected" });
+      skippedFields.push({ fieldId: mapping.fieldId, reason: "No fillable value assigned or not preselected" });
       continue;
     }
 
@@ -205,6 +205,20 @@ function focusElement(element: Element): void {
 
 function toBoolean(value: FieldMapping["value"]): boolean {
   return value === true || value === "true" || value === "yes" || value === "on" || value === "1";
+}
+
+export function isFillableMappingValue(value: FieldMapping["value"] | null | undefined): value is NonNullable<FieldMapping["value"]> {
+  return value !== undefined && value !== null && !isUnknownPlaceholderValue(value);
+}
+
+function isUnknownPlaceholderValue(value: FieldMapping["value"]): boolean {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/[.\s_-]+$/g, "");
+  const words = normalized.split(/\s+/).filter(Boolean);
+  return words.length <= 8 && /\b(unknown|none|null|n\/a|na|not applicable|not provided|not specified|unspecified|missing|no answer|i don't know|i do not know|dont know|don't know)\b/i.test(normalized);
 }
 
 function findRadioByValue(name: string, value: string): HTMLInputElement | undefined {

@@ -1,4 +1,4 @@
-import { StrictMode, useMemo } from "react";
+import { StrictMode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { usePopupState } from "./hooks/usePopupState";
 import { iconButtonClass, primaryButtonClass, secondaryButtonClassMd } from "@/shared/ui-styles";
@@ -11,12 +11,13 @@ initBridge(sendMessage);
 
 function Popup() {
   const state = usePopupState();
+  const [dismissedOllamaNoticeKey, setDismissedOllamaNoticeKey] = useState<string | null>(null);
   const activeFactCount = state.savedFactCount;
   const isBusy = state.status === "Scanning" || state.status === "Filling";
   const primaryActionLabel = !state.hasActiveProfile
     ? "Open settings"
     : isBusy
-      ? state.status === "Scanning" ? "Scanning…" : "Filling…"
+      ? state.status === "Scanning" ? "Scanningâ€¦" : "Fillingâ€¦"
       : state.hasScannedFields
         ? "Scan again"
         : "Scan this page";
@@ -24,7 +25,21 @@ function Popup() {
   const accountLabel = state.isSignedIn
     ? state.cloudState?.auth?.user.email ?? "Signed in"
     : "Not signed in";
-  const metricsText = `${state.fieldCount} fields found • ${state.readyCount} ready • ${state.blockedCount} blocked`;
+  const metricsText = `${state.fieldCount} fields found â€¢ ${state.readyCount} ready â€¢ ${state.blockedCount} blocked`;
+  const ollama403Reason = [
+    state.error,
+    state.debug?.llmKeyMatcher?.reason,
+    state.debug?.cloudAssistStatus
+  ].filter(Boolean).join(" ");
+  const hasOllamaOriginBlockReason = /ollama/i.test(ollama403Reason) && /http\s*403|403/i.test(ollama403Reason);
+  const ollamaNoticeKey = state.debug?.generatedAt ?? ollama403Reason;
+  const hasOllamaOriginBlock = hasOllamaOriginBlockReason && dismissedOllamaNoticeKey !== ollamaNoticeKey;
+
+  useEffect(() => {
+    if (!hasOllamaOriginBlockReason && dismissedOllamaNoticeKey) {
+      setDismissedOllamaNoticeKey(null);
+    }
+  }, [dismissedOllamaNoticeKey, hasOllamaOriginBlockReason]);
 
   const missingFields = useMemo(() => {
     return (state.debug?.fields ?? []).filter((field) =>
@@ -99,16 +114,16 @@ function Popup() {
             <div className="grid gap-1">
               <h2 className="m-0 text-[22px] font-[760] tracking-[-0.045em]">
                 {isBusy
-                  ? state.status === "Scanning" ? "Scanning page…" : "Filling fields…"
+                  ? state.status === "Scanning" ? "Scanning pageâ€¦" : "Filling fieldsâ€¦"
                   : state.hasScannedFields
-                    ? "Fields filled — hover to review"
+                    ? "Fields filled â€” hover to review"
                     : state.hasActiveProfile
                       ? state.aiAssistConfigured ? "Scan this page for form fields" : "Choose an AI model to unlock smart assist"
                       : "Load a profile first"}
               </h2>
               <p className="m-0 text-[13px] leading-5 text-[var(--color-ink-soft)]">
                 {isBusy
-                  ? state.status === "Scanning" ? "Reading form fields and matching your profile…" : "Writing values into the page…"
+                  ? state.status === "Scanning" ? "Reading form fields and matching your profileâ€¦" : "Writing values into the pageâ€¦"
                   : state.error
                     ? state.error
                     : state.pendingConflictCount > 0
@@ -150,6 +165,35 @@ function Popup() {
           <span className="text-[13px] leading-5 text-[var(--color-ink-soft)]">{metricsText}</span>
           <span className="shrink-0 text-[13px] font-semibold text-[var(--color-ink)]">{state.usageText}</span>
         </div>
+
+        {hasOllamaOriginBlock ? (
+          <div className="rounded-2xl border border-[rgba(138,66,22,0.24)] bg-[rgba(255,248,240,0.96)] p-3.5 text-[var(--color-ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="grid gap-1.5">
+                <h3 className="m-0 text-[11px] font-[820] uppercase tracking-[0.16em] text-[rgb(132,69,28)]">Ollama access blocked</h3>
+                <p className="m-0 text-[13px] leading-5 text-[var(--color-ink-soft)]">
+                  Infill can't reach Ollama from this extension yet. Allow extension origins in Ollama, restart it, then try again.
+                </p>
+              </div>
+              <button
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-white text-[18px] leading-none text-[var(--color-ink-soft)] transition hover:border-[rgba(0,0,0,0.18)] hover:text-[var(--color-ink)]"
+                type="button"
+                aria-label="Dismiss Ollama notice"
+                onClick={() => setDismissedOllamaNoticeKey(ollamaNoticeKey)}
+              >
+                Ã—
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <a className="rounded-full bg-[rgb(132,69,28)] px-3 py-2 text-[12px] font-[780] text-white transition hover:bg-[rgb(105,52,21)]" href="http://127.0.0.1:8788/common-problems" target="_blank" rel="noreferrer">
+                How to fix it
+              </a>
+              <button className={`${secondaryButtonClassMd} px-3 py-2 text-[12px]`} type="button" onClick={() => setDismissedOllamaNoticeKey(ollamaNoticeKey)}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {state.learnedNoticeCount > 0 ? (
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-[rgba(0,0,0,0.12)] bg-[rgba(255,255,255,0.82)] px-3.5 py-3 text-[13px] text-[var(--color-ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
@@ -236,6 +280,48 @@ function Popup() {
                 <span>filled: {state.debug.filledCount}</span>
                 <span>skipped: {state.debug.skippedFillCount}</span>
                 <span>{state.debug.cloudAssistStatus}</span>
+              </div>
+              <div className="grid gap-1">
+                <h3 className="m-0 text-[11px] font-[780] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">LLM key matcher</h3>
+                <div className="grid gap-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-mist)] px-3 py-2">
+                  {state.debug.llmKeyMatcher ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <span>enabled: {String(state.debug.llmKeyMatcher.enabled)}</span>
+                        <span>status: {state.debug.llmKeyMatcher.status}</span>
+                        <span>provider: {state.debug.llmKeyMatcher.providerId}</span>
+                        <span>model: {state.debug.llmKeyMatcher.model}</span>
+                        <span>targets: {state.debug.llmKeyMatcher.request?.targets.length ?? 0}</span>
+                        <span>facts sent: {state.debug.llmKeyMatcher.request?.facts.length ?? 0}</span>
+                        <span>matches: {state.debug.llmKeyMatcher.response?.matches.length ?? 0}</span>
+                        <span>latency: {state.debug.llmKeyMatcher.durationMs ? `${state.debug.llmKeyMatcher.durationMs}ms` : "n/a"}</span>
+                      </div>
+                      {state.debug.llmKeyMatcher.reason ? (
+                        <div className="rounded-lg bg-white/70 px-2 py-1 text-[var(--color-ink)]">
+                          {state.debug.llmKeyMatcher.reason}
+                        </div>
+                      ) : null}
+                      <div className="grid gap-1">
+                        <strong className="text-[12px] text-[var(--color-ink)]">Input sent to AI</strong>
+                        <textarea
+                          className="h-28 resize-none rounded-lg border border-[var(--color-line)] bg-white p-2 font-mono text-[10px] text-[var(--color-ink-soft)]"
+                          readOnly
+                          value={state.debug.llmKeyMatcher.prompt ?? JSON.stringify(state.debug.llmKeyMatcher.request ?? {}, null, 2)}
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <strong className="text-[12px] text-[var(--color-ink)]">AI result</strong>
+                        <textarea
+                          className="h-24 resize-none rounded-lg border border-[var(--color-line)] bg-white p-2 font-mono text-[10px] text-[var(--color-ink-soft)]"
+                          readOnly
+                          value={state.debug.llmKeyMatcher.rawResponseText ?? JSON.stringify(state.debug.llmKeyMatcher.response ?? {}, null, 2)}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <span>No LLM key matcher debug was recorded for this scan.</span>
+                  )}
+                </div>
               </div>
               <div className="grid gap-1">
                 <h3 className="m-0 text-[11px] font-[780] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">Profile data parsed</h3>
@@ -331,12 +417,6 @@ function Popup() {
           <button className={primaryButtonClass} type="button" onClick={handlePrimaryAction} disabled={primaryActionDisabled}>
             {primaryActionLabel}
           </button>
-
-          {state.developerModeEnabled ? (
-            <button className={`${secondaryButtonClassMd} border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-[var(--color-danger)] hover:text-white`} type="button" onClick={state.qaDummyFill}>
-              QA Dummy Fill (Alt+Shift+Q)
-            </button>
-          ) : null}
 
           <div className="grid gap-2 text-[12px] font-semibold text-[var(--color-ink-soft)]">
             <button className={secondaryButtonClassMd} type="button" onClick={state.openSettings}>

@@ -23,8 +23,8 @@ export async function checkLocalOllama(input: { baseUrl: string; model?: string 
 
   try {
     const [tagsResponse, versionResponse] = await Promise.all([
-      fetch(`${nativeBaseUrl}/api/tags`, { signal: controller.signal }),
-      fetch(`${nativeBaseUrl}/api/version`, { signal: controller.signal }).catch(() => undefined)
+      fetch(`${nativeBaseUrl}/api/tags`, { signal: controller.signal, cache: "no-store" }),
+      fetch(`${nativeBaseUrl}/api/version`, { signal: controller.signal, cache: "no-store" }).catch(() => undefined)
     ]);
 
     if (!tagsResponse.ok) {
