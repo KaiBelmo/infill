@@ -27,6 +27,7 @@ export const ProfileCategorySchema = z.enum([
 ]);
 
 export const ProfileFactValueSchema = z.union([
+  z.null(),
   z.string(),
   z.number(),
   z.boolean(),

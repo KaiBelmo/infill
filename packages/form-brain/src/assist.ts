@@ -313,6 +313,10 @@ function isEligibleForAssistGeneration(field: ExtractedField, local: FieldMappin
 }
 
 function hasPromptValue(value: ProfileFact["value"]): boolean {
+  if (value === null) {
+    return false;
+  }
+
   if (Array.isArray(value)) {
     return value.length > 0;
   }

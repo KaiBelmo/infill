@@ -21,7 +21,8 @@ describe("memory import", () => {
     const facts = parseMemoryFacts("Identity display name: Alex Chen [fact]\nIdentity sex or gender: unknown [unknown]");
 
     expect(facts[0]?.value).toBe("Alex Chen");
-    expect(facts[1]?.value).toBe("unknown");
+    expect(facts[1]?.value).toBeNull();
+    expect(facts[1]?.confidence).toBe("missing");
   });
 
   it("strips any trailing bracketed annotation tags", () => {
@@ -51,21 +52,24 @@ describe("memory import", () => {
         label: "Phone number verification required",
         value: "Flutter and Next.js were part of interview preparation",
         category: "custom",
-        sensitivity: "normal"
+        sensitivity: "normal",
+        confidence: "high"
       },
       {
         key: "custom.email_deliverability_note",
         label: "Email deliverability note",
         value: "use a professional domain",
         category: "custom",
-        sensitivity: "normal"
+        sensitivity: "normal",
+        confidence: "high"
       },
       {
         key: "custom.skills_frontend_mobile",
         label: "Skills frontend mobile",
         value: "Flutter and Next.js were part of interview preparation",
         category: "custom",
-        sensitivity: "normal"
+        sensitivity: "normal",
+        confidence: "high"
       }
     ]);
   });

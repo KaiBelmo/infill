@@ -1,12 +1,15 @@
-import type { ProfileCategory, Sensitivity } from "@infill/shared";
+import type { ProfileCategory, ProfileFact, Sensitivity } from "@infill/shared";
 import { findProfileKeyFromLabel, categoryForProfileKey } from "@infill/form-brain";
+
+export type ConfidenceLevel = "high" | "medium" | "low" | "missing";
 
 export type MemoryFactDraft = {
   key: string;
   label: string;
-  value: string;
+  value: ProfileFact["value"];
   category: ProfileCategory;
   sensitivity: Sensitivity;
+  confidence: ConfidenceLevel;
 };
 
 export function parseMemoryFacts(text: string): MemoryFactDraft[] {
@@ -25,13 +28,14 @@ function parseMemoryLine(line: string): MemoryFactDraft | undefined {
   }
 
   const label = match[1]?.trim();
-  const value = stripFactTag(match[2]?.trim() ?? "");
-  if (!label || !value) {
+  const rawValue = match[2]?.trim() ?? "";
+  const value = normalizeMemoryFactValue(rawValue, label);
+  if (!label || value === undefined) {
     return undefined;
   }
 
   const key = keyForLabel(label);
-  if (!isValidFactValue(key, value)) {
+  if (typeof value === "string" && !isValidFactValue(key, value)) {
     return undefined;
   }
 
@@ -40,12 +44,49 @@ function parseMemoryLine(line: string): MemoryFactDraft | undefined {
     label,
     value,
     category: categoryForProfileKey(key),
-    sensitivity: sensitivityForLabel(label)
+    sensitivity: sensitivityForLabel(label),
+    confidence: confidenceForMemoryValue(rawValue, value, label)
   };
+}
+
+export function confidenceForMemoryValue(
+  value: string,
+  normalizedValue?: ProfileFact["value"],
+  label?: string
+): ConfidenceLevel {
+  const explicit = value.match(/\[\s*confidence\s*:\s*(high|medium|low|missing)\s*\]/i)?.[1];
+  if (explicit) return explicit.toLowerCase() as ConfidenceLevel;
+
+  const tags = Array.from(
+    value.matchAll(/\[\s*([^\]\r\n]{1,80})\s*\]/g),
+    (match) => match[1]?.trim().toLowerCase() ?? ""
+  );
+  if (normalizedValue === null || tags.includes("unknown")) return "missing";
+  if (tags.includes("speculation") || tags.includes("prediction")) return "low";
+  if (tags.includes("inference") || tags.includes("assumption")) return "medium";
+  return "high";
+}
+
+function normalizeMemoryFactValue(value: string, label?: string): ProfileFact["value"] | undefined {
+  const tags = Array.from(
+    value.matchAll(/\[\s*([^\]\r\n]{1,80})\s*\]/g),
+    (match) => match[1]?.trim().toLowerCase() ?? ""
+  );
+  if (/^unknown\b/i.test(label?.trim() ?? "") && tags.includes("unknown")) return null;
+
+  const cleaned = stripFactTag(value);
+  if (!cleaned) return undefined;
+  return isUnknownPlaceholderValue(cleaned) ? null : cleaned;
 }
 
 function stripFactTag(value: string): string {
   return value.replace(/(?:\s*\[[^\]\r\n]{1,80}\]\s*)+$/g, "").trim();
+}
+
+function isUnknownPlaceholderValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase().replace(/[.\s_-]+$/g, "");
+  const words = normalized.split(/\s+/).filter(Boolean);
+  return words.length <= 8 && /\b(unknown|none|null|n\/a|na|not applicable|not provided|not specified|unspecified|missing|no answer|i don't know|i do not know|dont know|don't know)\b/i.test(normalized);
 }
 
 function keyForLabel(label: string): string {
