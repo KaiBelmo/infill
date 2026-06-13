@@ -11,13 +11,16 @@ initBridge(sendMessage);
 
 function Popup() {
   const state = usePopupState();
+  const supportUrl = __VITE_WEB_BASE_URL__
+    ? `${__VITE_WEB_BASE_URL__.replace(/\/$/, "")}/common-problems`
+    : undefined;
   const [dismissedOllamaNoticeKey, setDismissedOllamaNoticeKey] = useState<string | null>(null);
   const activeFactCount = state.savedFactCount;
   const isBusy = state.status === "Scanning" || state.status === "Filling";
   const primaryActionLabel = !state.hasActiveProfile
     ? "Open settings"
     : isBusy
-      ? state.status === "Scanning" ? "Scanningâ€¦" : "Fillingâ€¦"
+      ? state.status === "Scanning" ? "Scanning…" : "Filling…"
       : state.hasScannedFields
         ? "Scan again"
         : "Scan this page";
@@ -25,7 +28,7 @@ function Popup() {
   const accountLabel = state.isSignedIn
     ? state.cloudState?.auth?.user.email ?? "Signed in"
     : "Not signed in";
-  const metricsText = `${state.fieldCount} fields found â€¢ ${state.readyCount} ready â€¢ ${state.blockedCount} blocked`;
+  const metricsText = `${state.fieldCount} fields found • ${state.readyCount} ready • ${state.blockedCount} blocked`;
   const ollama403Reason = [
     state.error,
     state.debug?.llmKeyMatcher?.reason,
@@ -114,16 +117,16 @@ function Popup() {
             <div className="grid gap-1">
               <h2 className="m-0 text-[22px] font-[760] tracking-[-0.045em]">
                 {isBusy
-                  ? state.status === "Scanning" ? "Scanning pageâ€¦" : "Filling fieldsâ€¦"
+                  ? state.status === "Scanning" ? "Scanning page…" : "Filling fields…"
                   : state.hasScannedFields
-                    ? "Fields filled â€” hover to review"
+                    ? "Fields filled — hover to review"
                     : state.hasActiveProfile
                       ? state.aiAssistConfigured ? "Scan this page for form fields" : "Choose an AI model to unlock smart assist"
                       : "Load a profile first"}
               </h2>
               <p className="m-0 text-[13px] leading-5 text-[var(--color-ink-soft)]">
                 {isBusy
-                  ? state.status === "Scanning" ? "Reading form fields and matching your profileâ€¦" : "Writing values into the pageâ€¦"
+                  ? state.status === "Scanning" ? "Reading form fields and matching your profile…" : "Writing values into the page…"
                   : state.error
                     ? state.error
                     : state.pendingConflictCount > 0
@@ -181,13 +184,15 @@ function Popup() {
                 aria-label="Dismiss Ollama notice"
                 onClick={() => setDismissedOllamaNoticeKey(ollamaNoticeKey)}
               >
-                Ã—
+                ×
               </button>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <a className="rounded-full bg-[rgb(132,69,28)] px-3 py-2 text-[12px] font-[780] text-white transition hover:bg-[rgb(105,52,21)]" href="http://127.0.0.1:8788/common-problems" target="_blank" rel="noreferrer">
-                How to fix it
-              </a>
+              {supportUrl ? (
+                <a className="rounded-full bg-[rgb(132,69,28)] px-3 py-2 text-[12px] font-[780] text-white transition hover:bg-[rgb(105,52,21)]" href={supportUrl} target="_blank" rel="noreferrer">
+                  How to fix it
+                </a>
+              ) : null}
               <button className={`${secondaryButtonClassMd} px-3 py-2 text-[12px]`} type="button" onClick={() => setDismissedOllamaNoticeKey(ollamaNoticeKey)}>
                 Dismiss
               </button>
