@@ -11,6 +11,28 @@ describe("assist helpers", () => {
     expect(parseAssistAnswers("not json").size).toBe(0);
   });
 
+  it("omits placeholder answers instead of filling unknown-style values", () => {
+    const answers = parseAssistAnswers(JSON.stringify({
+      answers: [
+        { fieldId: "unknown", value: "unknown" },
+        { fieldId: "none", value: "none" },
+        { fieldId: "na", value: "N/A" },
+        { fieldId: "unknown_url", value: "Unknown exact URL" },
+        { fieldId: "url_unknown", value: "Exact URL unknown" },
+        { fieldId: "mixed", value: ["unknown", "github.com/example"] },
+        { fieldId: "only_placeholders", value: ["unknown", "not provided"] }
+      ]
+    }));
+
+    expect(answers.has("unknown")).toBe(false);
+    expect(answers.has("none")).toBe(false);
+    expect(answers.has("na")).toBe(false);
+    expect(answers.has("unknown_url")).toBe(false);
+    expect(answers.has("url_unknown")).toBe(false);
+    expect(answers.get("mixed")?.value).toEqual(["github.com/example"]);
+    expect(answers.has("only_placeholders")).toBe(false);
+  });
+
   it("prepares only safe facts and eligible unresolved fields for model prompts", () => {
     const request = createAssistRequest();
     const prepared = prepareAssistInput(request);
@@ -19,6 +41,31 @@ describe("assist helpers", () => {
     expect(prepared.llmFields.map((field) => field.fieldId)).toEqual(["field_long"]);
     expect(prepared.promptMessages[1]?.content).not.toContain("Ada Lovelace");
     expect(prepared.cachedMappings.get("field_email")?.value).toBe("ada@example.com");
+  });
+
+  it("does not cache null profile facts as fillable values", () => {
+    const request = createAssistRequest();
+    request.facts = [
+      {
+        id: "fact_email",
+        key: "contact.email",
+        label: "Email",
+        value: null,
+        category: "contact",
+        sensitivity: "normal",
+        source: "llm_suggested",
+        verified: false,
+        confidence: 0.8,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+        sourceRefs: []
+      }
+    ];
+
+    const prepared = prepareAssistInput(request);
+
+    expect(prepared.cachedMappings.has("field_email")).toBe(false);
+    expect(prepared.promptMessages[1]?.content).toContain('"hasValue":false');
   });
 
   it("merges cached and generated answers without changing restricted fields", () => {
