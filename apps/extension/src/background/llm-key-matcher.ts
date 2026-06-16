@@ -1,6 +1,8 @@
 import {
   buildLlmBatchKeyMatchPrompt,
   buildLlmBatchKeyMatchRequest,
+  getCachedLlmBatchKeyMatchResponse,
+  setCachedLlmBatchKeyMatchResponse,
   type LlmBatchKeyMatchRequest,
   type LlmBatchKeyMatchResponse,
   type ProfileFactResolverOptions
@@ -59,11 +61,46 @@ export async function buildLocalLlmKeyMatcherResolverOptions(
     };
   }
 
+  const resolverOptionsKey = {
+    enableLlmKeyMatcherFallback: true,
+    modelVersion: state.config.ollamaModel,
+  };
+  const cachedResponse = getCachedLlmBatchKeyMatchResponse(request, resolverOptionsKey);
+  if (cachedResponse) {
+    debugLog("[llmKeyMatcher] Ollama cache hit for batch key match", {
+      targets: request.targets.map((target) => target.targetKey),
+    });
+    return {
+      resolverOptions: {
+        enableLlmKeyMatcherFallback: true,
+        modelVersion: state.config.ollamaModel,
+        llmKeyMatcher: (singleRequest) => {
+          const match = cachedResponse.matches.find((item) => item.targetKey === singleRequest.targetKey);
+          if (!match) return undefined;
+          const { targetKey: _targetKey, ...singleResponse } = match;
+          return singleResponse;
+        }
+      },
+      debug: {
+        enabled: true,
+        providerId: "ollama",
+        model: state.config.ollamaModel,
+        status: "success",
+        durationMs: 0,
+        prompt: "",
+        rawResponseText: JSON.stringify(cachedResponse),
+        request,
+        response: cachedResponse
+      }
+    };
+  }
+
   const startedAt = Date.now();
   try {
     const baseUrl = validateOllamaBaseUrl(state.config.ollamaBaseUrl);
     const result = await requestOllamaBatchKeyMatch(baseUrl, state.config.ollamaModel, request, (state.config.ollamaTimeout ?? 60) * 1000);
     const response = result.response;
+    setCachedLlmBatchKeyMatchResponse(request, response, resolverOptionsKey);
     const durationMs = Date.now() - startedAt;
 
     debugLog("[llmKeyMatcher] Ollama batch key match completed", {
@@ -141,6 +178,41 @@ export async function buildLlmKeyMatcherResolverOptions(
     };
   }
 
+  const resolverOptionsKey = {
+    enableLlmKeyMatcherFallback: true,
+    modelVersion: provider === "cloud" ? "managed-cloud" : state.config.ollamaModel,
+  };
+  const cachedResponse = getCachedLlmBatchKeyMatchResponse(request, resolverOptionsKey);
+  if (cachedResponse) {
+    debugLog("[llmKeyMatcher] cache hit for batch key match", {
+      provider,
+      targets: request.targets.map((target) => target.targetKey),
+    });
+    return {
+      resolverOptions: {
+        enableLlmKeyMatcherFallback: true,
+        modelVersion: resolverOptionsKey.modelVersion,
+        llmKeyMatcher: (singleRequest) => {
+          const match = cachedResponse.matches.find((item) => item.targetKey === singleRequest.targetKey);
+          if (!match) return undefined;
+          const { targetKey: _targetKey, ...singleResponse } = match;
+          return singleResponse;
+        }
+      },
+      debug: {
+        enabled: true,
+        providerId,
+        model,
+        status: "success",
+        durationMs: 0,
+        prompt: "",
+        rawResponseText: JSON.stringify(cachedResponse),
+        request,
+        response: cachedResponse
+      }
+    };
+  }
+
   const startedAt = Date.now();
   try {
     const result = provider === "cloud"
@@ -152,6 +224,7 @@ export async function buildLlmKeyMatcherResolverOptions(
         (state.config.ollamaTimeout ?? 60) * 1000
       );
     const response = result.response;
+    setCachedLlmBatchKeyMatchResponse(request, response, resolverOptionsKey);
     const durationMs = Date.now() - startedAt;
 
     debugLog("[llmKeyMatcher] batch key match completed", {
