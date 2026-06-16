@@ -591,7 +591,7 @@ function ProfileViewComponent(props: ProfileViewProps) {
                         if (!isNaN(v)) setOllamaTimeout(Math.max(5, Math.min(300, v)));
                       }}
                     />
-                    <span className="text-xs text-[var(--color-ink-muted)]">How long to wait for a local model response (5â€“300 s). Increase for slower machines or larger models.</span>
+                    <span className="text-xs text-[var(--color-ink-muted)]">How long to wait for a local model response (5–300 s). Increase for slower machines or larger models.</span>
                   </label>
                   <button className={primaryButtonClass} type="button" onClick={saveOllamaSettings}>Save AI settings</button>
                 </div>
