@@ -11,9 +11,6 @@ initBridge(sendMessage);
 
 function Popup() {
   const state = usePopupState();
-  const supportUrl = __VITE_WEB_BASE_URL__
-    ? `${__VITE_WEB_BASE_URL__.replace(/\/$/, "")}/common-problems`
-    : undefined;
   const [dismissedOllamaNoticeKey, setDismissedOllamaNoticeKey] = useState<string | null>(null);
   const activeFactCount = state.savedFactCount;
   const isBusy = state.status === "Scanning" || state.status === "Filling";
@@ -188,11 +185,9 @@ function Popup() {
               </button>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              {supportUrl ? (
-                <a className="rounded-full bg-[rgb(132,69,28)] px-3 py-2 text-[12px] font-[780] text-white transition hover:bg-[rgb(105,52,21)]" href={supportUrl} target="_blank" rel="noreferrer">
-                  How to fix it
-                </a>
-              ) : null}
+              <a className="rounded-full bg-[rgb(132,69,28)] px-3 py-2 text-[12px] font-[780] text-white transition hover:bg-[rgb(105,52,21)]" href="http://127.0.0.1:8788/common-problems" target="_blank" rel="noreferrer">
+                How to fix it
+              </a>
               <button className={`${secondaryButtonClassMd} px-3 py-2 text-[12px]`} type="button" onClick={() => setDismissedOllamaNoticeKey(ollamaNoticeKey)}>
                 Dismiss
               </button>
