@@ -1,4 +1,4 @@
-import {
+﻿import {
   AccountInfoSchema,
   AuthSessionEnvelopeSchema,
   CloudProfileListResponseSchema,
@@ -50,7 +50,7 @@ function createCloudApi() {
             return response;
           }
 
-          // Token may be expired � try refreshing once (coalesce concurrent refreshes)
+          // Token may be expired — try refreshing once (coalesce concurrent refreshes)
           if (!refreshPromise) {
             refreshPromise = refreshCloudSession().finally(() => { refreshPromise = null; });
           }
