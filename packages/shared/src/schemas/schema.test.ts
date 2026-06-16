@@ -34,6 +34,24 @@ describe("shared schemas", () => {
     expect(fact.sourceRefs).toEqual([]);
   });
 
+  it("allows null profile facts to represent learnable missing values", () => {
+    const fact = ProfileFactSchema.parse({
+      id: "fact_1",
+      key: "contact.linkedin",
+      label: "LinkedIn",
+      value: null,
+      category: "contact",
+      sensitivity: "normal",
+      source: "llm_suggested",
+      verified: false,
+      confidence: 0.8,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    });
+
+    expect(fact.value).toBeNull();
+  });
+
   it("validates local profile vault state", () => {
     const bundle = ProfileBundleSchema.parse({
       id: "profile_1",
