@@ -6,12 +6,15 @@ import {
 } from "@infill/snaplog/extension";
 
 const MAX_EXTENSION_SNAPLOG_ENTRIES = 500;
+const LOCAL_SNAPLOG_FORWARD_URL = "http://127.0.0.1:7777/log";
 
 const transport = hasChromeStorage()
   ? createExtensionSnaplogTransport({
       storage: chrome.storage.local,
       key: DEFAULT_EXTENSION_SNAPLOG_KEY,
-      maxEntries: MAX_EXTENSION_SNAPLOG_ENTRIES
+      maxEntries: MAX_EXTENSION_SNAPLOG_ENTRIES,
+      forwardUrl: LOCAL_SNAPLOG_FORWARD_URL,
+      shouldForward: () => import.meta.env.DEV
     })
   : createMemorySnaplogStore(MAX_EXTENSION_SNAPLOG_ENTRIES);
 
