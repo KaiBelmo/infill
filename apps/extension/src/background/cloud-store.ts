@@ -64,7 +64,7 @@ function chromeSessionStorageAdapter() {
   };
 }
 
-// Separate tiny store for session tokens â€” persisted to chrome.storage.session
+// Separate tiny store for session tokens — persisted to chrome.storage.session
 // (in-memory, not written to disk, not readable by other extensions)
 export const useSessionTokenStore = create<{ sessionToken: string; refreshToken: string }>()(
   persist(
@@ -116,12 +116,12 @@ export const useCloudStore = create<CloudState & CloudStoreActions>()(
       },
 
       persistAuth(auth: CloudAuthState): void {
-        // Tokens â†’ session storage (in-memory only)
+        // Tokens → session storage (in-memory only)
         useSessionTokenStore.setState({
           sessionToken: auth.sessionToken,
           refreshToken: auth.refreshToken
         });
-        // Auth metadata â†’ local storage WITHOUT plaintext tokens
+        // Auth metadata → local storage WITHOUT plaintext tokens
         const { sessionToken: _, refreshToken: __, ...authWithoutTokens } = auth;
         set({ auth: { ...authWithoutTokens, sessionToken: "", refreshToken: "" } });
       },
@@ -150,7 +150,7 @@ export const useCloudStore = create<CloudState & CloudStoreActions>()(
         }
         if (version === 0) {
           // v0 had config/auth as separate top-level keys inside the persisted blob
-          // v1 uses { config, auth } shape â€” same shape, just bump to trigger onRehydrateStorage
+          // v1 uses { config, auth } shape — same shape, just bump to trigger onRehydrateStorage
           return persistedState as CloudState;
         }
         return {
@@ -164,7 +164,7 @@ export const useCloudStore = create<CloudState & CloudStoreActions>()(
       onRehydrateStorage: () => {
         return async (state, error) => {
           if (error || state) return;
-          // No persisted state found under new key â€” try legacy migration
+          // No persisted state found under new key — try legacy migration
           const legacy = await chrome.storage.local.get([LEGACY_CONFIG_KEY, LEGACY_AUTH_KEY]);
           const legacyConfig = legacy[LEGACY_CONFIG_KEY] as CloudConfig | undefined;
           const legacyAuth = legacy[LEGACY_AUTH_KEY] as Omit<CloudAuthState, "sessionToken" | "refreshToken"> & { sessionToken: string; refreshToken: string } | undefined;
