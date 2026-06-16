@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:test-forms": "vite build --config test-forms/vite.config.ts",
     "dev": "vite build --watch",
+    "dev:test-forms": "vite --config test-forms/vite.config.ts",
     "test": "vitest run --passWithNoTests",
+    "test:test-forms": "vitest run --config test-forms/vitest.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
