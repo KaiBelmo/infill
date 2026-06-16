@@ -72,7 +72,7 @@ export const usePopupStore = create<PopupState & PopupActions>()((set, get) => (
 
     set({ forms: [], mappings: [], error: "", status: "Scanning", scannedAt: "", debug: undefined });
 
-    // Delegate to background â€” scan continues even if popup closes
+    // Delegate to background — scan continues even if popup closes
     try {
       const result = await bgScanTab(tab.id, tab.url);
       set({
