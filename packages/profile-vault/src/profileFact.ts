@@ -94,7 +94,8 @@ export function normalizeProfileKey(value: string): string {
 
 function normalizeProfileFactValue(value: ProfileFact["value"]): ProfileFact["value"] {
   if (typeof value === "string") {
-    return value.trim();
+    const trimmed = value.trim();
+    return isUnknownPlaceholderValue(trimmed) ? null : trimmed;
   }
 
   if (Array.isArray(value)) {
@@ -102,4 +103,10 @@ function normalizeProfileFactValue(value: ProfileFact["value"]): ProfileFact["va
   }
 
   return value;
+}
+
+function isUnknownPlaceholderValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase().replace(/[.\s_-]+$/g, "");
+  const words = normalized.split(/\s+/).filter(Boolean);
+  return words.length <= 8 && /\b(unknown|none|null|n\/a|na|not applicable|not provided|not specified|unspecified|missing|no answer|i don't know|i do not know|dont know|don't know)\b/i.test(normalized);
 }
