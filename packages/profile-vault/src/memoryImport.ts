@@ -49,38 +49,60 @@ function parseMemoryLine(line: string): MemoryFactDraft | undefined {
   };
 }
 
-export function confidenceForMemoryValue(
-  value: string,
-  normalizedValue?: ProfileFact["value"],
-  label?: string
-): ConfidenceLevel {
-  const explicit = value.match(/\[\s*confidence\s*:\s*(high|medium|low|missing)\s*\]/i)?.[1];
-  if (explicit) return explicit.toLowerCase() as ConfidenceLevel;
+export function confidenceForMemoryValue(value: string, normalizedValue?: ProfileFact["value"], label?: string): ConfidenceLevel {
+  const explicit = explicitConfidenceTag(value);
+  if (explicit) {
+    return explicit;
+  }
 
-  const tags = Array.from(
-    value.matchAll(/\[\s*([^\]\r\n]{1,80})\s*\]/g),
-    (match) => match[1]?.trim().toLowerCase() ?? ""
-  );
-  if (normalizedValue === null || tags.includes("unknown")) return "missing";
-  if (tags.includes("speculation") || tags.includes("prediction")) return "low";
-  if (tags.includes("inference") || tags.includes("assumption")) return "medium";
+  const sourceTags = sourceFactTags(value);
+  if ((label && isUnknownLabel(label) && sourceTags.includes("unknown")) || normalizedValue === null) {
+    return "missing";
+  }
+
+  if (sourceTags.includes("unknown")) {
+    return "missing";
+  }
+
+  if (sourceTags.includes("speculation") || sourceTags.includes("prediction")) {
+    return "low";
+  }
+
+  if (sourceTags.includes("inference") || sourceTags.includes("assumption")) {
+    return "medium";
+  }
+
   return "high";
 }
 
 function normalizeMemoryFactValue(value: string, label?: string): ProfileFact["value"] | undefined {
-  const tags = Array.from(
-    value.matchAll(/\[\s*([^\]\r\n]{1,80})\s*\]/g),
-    (match) => match[1]?.trim().toLowerCase() ?? ""
-  );
-  if (/^unknown\b/i.test(label?.trim() ?? "") && tags.includes("unknown")) return null;
+  if (label && isUnknownLabel(label) && sourceFactTags(value).includes("unknown")) {
+    return null;
+  }
 
   const cleaned = stripFactTag(value);
-  if (!cleaned) return undefined;
+  if (!cleaned) {
+    return undefined;
+  }
+
   return isUnknownPlaceholderValue(cleaned) ? null : cleaned;
 }
 
 function stripFactTag(value: string): string {
   return value.replace(/(?:\s*\[[^\]\r\n]{1,80}\]\s*)+$/g, "").trim();
+}
+
+function explicitConfidenceTag(value: string): ConfidenceLevel | undefined {
+  const match = value.match(/\[\s*confidence\s*:\s*(high|medium|low|missing)\s*\]/i);
+  return match?.[1]?.toLowerCase() as ConfidenceLevel | undefined;
+}
+
+function sourceFactTags(value: string): string[] {
+  return Array.from(value.matchAll(/\[\s*([^\]\r\n]{1,80})\s*\]/g), (match) => match[1]?.trim().toLowerCase() ?? "");
+}
+
+function isUnknownLabel(label: string): boolean {
+  return /^unknown\b/i.test(label.trim());
 }
 
 function isUnknownPlaceholderValue(value: string): boolean {
@@ -89,15 +111,15 @@ function isUnknownPlaceholderValue(value: string): boolean {
   return words.length <= 8 && /\b(unknown|none|null|n\/a|na|not applicable|not provided|not specified|unspecified|missing|no answer|i don't know|i do not know|dont know|don't know)\b/i.test(normalized);
 }
 
-function keyForLabel(label: string): string {
-  return findProfileKeyFromLabel(label) ?? `custom.${label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`;
-}
-
 function sensitivityForLabel(label: string): Sensitivity {
   const normalized = label.toLowerCase();
   if (/\bpassword|card|bank|ssn|passport|secret|token|key\b/.test(normalized)) return "secret";
   if (/\bdob|birth|salary|medical|legal|citizenship\b/.test(normalized)) return "restricted";
   return "normal";
+}
+
+function keyForLabel(label: string): string {
+  return findProfileKeyFromLabel(label) ?? `custom.${label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`;
 }
 
 function isValidFactValue(key: string, value: string): boolean {
