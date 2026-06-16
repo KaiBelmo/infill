@@ -229,7 +229,7 @@ export function toPromptFactSummary(fact: ProfileFact) {
 export function normalizeAssistAnswerValue(value: unknown): FieldMapping["value"] | undefined {
   if (typeof value === "string") {
     const trimmed = value.trim();
-    return trimmed ? trimmed : undefined;
+    return trimmed && !isUnknownPlaceholderValue(trimmed) ? trimmed : undefined;
   }
 
   if (typeof value === "boolean" || typeof value === "number") {
@@ -240,14 +240,18 @@ export function normalizeAssistAnswerValue(value: unknown): FieldMapping["value"
     const normalized = value
       .filter((item): item is string => typeof item === "string")
       .map((item) => item.trim())
-      .filter(Boolean);
+      .filter((item) => item.length > 0 && !isUnknownPlaceholderValue(item));
     return normalized.length > 0 ? normalized : undefined;
   }
 
   return undefined;
 }
 
-export function normalizeFactValue(value: ProfileFact["value"]): string | number | boolean | string[] {
+export function normalizeFactValue(value: ProfileFact["value"]): string | number | boolean | string[] | undefined {
+  if (value === null) {
+    return undefined;
+  }
+
   if (Array.isArray(value)) {
     return value;
   }
@@ -282,10 +286,15 @@ export function resolveCachedFields(
       continue;
     }
 
+    const value = normalizeFactValue(fact.value);
+    if (value === undefined) {
+      continue;
+    }
+
     result.set(field.fieldId, {
       ...local,
       profileKey: fact.key,
-      value: normalizeFactValue(fact.value),
+      value,
       valueSource: "profile_fact",
       confidence: field.autocomplete ? 0.95 : 0.72,
       reason: field.autocomplete ? "Matched from autocomplete metadata (cached)." : "Matched from field label (cached).",
@@ -332,7 +341,11 @@ function hasPromptValue(value: ProfileFact["value"]): boolean {
   return true;
 }
 
-function describePromptValue(value: ProfileFact["value"]): "text" | "number" | "boolean" | "list" | "object" {
+function describePromptValue(value: ProfileFact["value"]): "missing" | "text" | "number" | "boolean" | "list" | "object" {
+  if (value === null) {
+    return "missing";
+  }
+
   if (Array.isArray(value)) {
     return "list";
   }
@@ -350,4 +363,10 @@ function describePromptValue(value: ProfileFact["value"]): "text" | "number" | "
   }
 
   return "text";
+}
+
+function isUnknownPlaceholderValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase().replace(/[.\s_-]+$/g, "");
+  const words = normalized.split(/\s+/).filter(Boolean);
+  return words.length <= 8 && /\b(unknown|none|null|n\/a|na|not applicable|not provided|not specified|unspecified|missing|no answer|i don't know|i do not know|dont know|don't know)\b/i.test(normalized);
 }
