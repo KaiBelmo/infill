@@ -230,7 +230,7 @@ export type ApiError = z.infer<typeof ApiErrorSchema>;
 export const ParsedProfileFieldSchema = z.object({
   key: z.string().min(1),
   label: z.string().min(1),
-  value: z.string().min(1),
+  value: z.string().min(1).nullable(),
   category: z.enum(["identity", "contact", "address", "work", "company", "custom"])
 });
 
@@ -243,9 +243,7 @@ export const ParseProfileResponseSchema = z.object({
   fields: z.array(ParsedProfileFieldSchema),
   source: CloudFeatureSourceSchema,
   warnings: z.array(z.string()).default([]),
-  credits: CreditBalanceSchema,
-  providerId: z.string().optional(),
-  model: z.string().optional()
+  credits: CreditBalanceSchema
 });
 
 export const ExtensionAuthExchangeRequestSchema = z.object({
