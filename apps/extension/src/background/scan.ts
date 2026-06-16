@@ -98,7 +98,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   debugLog("[scanTab] START tabId=", tabId, "url=", tabUrl);
 
   if (isUnsupportedUrl(tabUrl)) {
-    debugLog("[scanTab] Blocked Ã¢â‚¬â€ unsupported URL");
+    debugLog("[scanTab] Blocked â€” unsupported URL");
     store.setScanState({
       status: "Blocked",
       error: "This page cannot be scanned.",
@@ -146,7 +146,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   const loaded = await ensureContentScript(tabId);
   debugLog("[scanTab] ensureContentScript result=", loaded);
   if (!loaded) {
-    debugLog("[scanTab] ERROR Ã¢â‚¬â€ content script could not load");
+    debugLog("[scanTab] ERROR â€” content script could not load");
     store.setScanState({
       status: "Error",
       error: "Could not load content script on this page.",
@@ -225,7 +225,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
     scanFieldCount: allForms.reduce((sum, form) => sum + form.fields.length, 0)
   }, "background/scanTab");
   if (allForms.length === 0 || allForms.every((form) => form.fields.length === 0)) {
-    debugLog("[scanTab] Blocked Ã¢â‚¬â€ no visible/enabled fields");
+    debugLog("[scanTab] Blocked â€” no visible/enabled fields");
     store.setScanState({
       status: "Blocked",
       error: "No visible or enabled form fields were detected on this page.",
@@ -340,7 +340,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
       ? "Review fill"
       : "Blocked";
 
-  debugLog("[scanTab] DONE Ã¢â‚¬â€ finalStatus=", finalStatus, "mappings=", nextMappings.length);
+  debugLog("[scanTab] DONE â€” finalStatus=", finalStatus, "mappings=", nextMappings.length);
   const finalMappings = nextMappings.map(normalizeReviewMapping);
   const scannedAt = new Date().toISOString();
   const initialDebug = buildScanDebug({
