@@ -547,7 +547,7 @@ export const useProfileStore = create<StoredExtensionState & ProfileStoreActions
             }
             return;
           }
-          // No persisted state found â€” try legacy migration
+          // No persisted state found — try legacy migration
           const legacyFacts = await listProfileFacts().catch(() => []);
           const migrated = createDefaultState(legacyFacts.map((fact) => ProfileFactSchema.parse(fact)));
           useProfileStore.setState(migrated);
