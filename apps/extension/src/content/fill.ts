@@ -19,6 +19,7 @@ export async function fillApprovedFields(mappings: FieldMapping[], forms: Extrac
   const skippedFieldIds: string[] = [];
   const skippedFields: SkippedField[] = [];
   const cursor = createFillCursor();
+  const filledRadioGroups = new Set<string>();
   console.debug("[infill fill] start", {
     mappings: mappings.length,
     forms: forms.length,
@@ -79,6 +80,20 @@ export async function fillApprovedFields(mappings: FieldMapping[], forms: Extrac
     }
 
     const element = locateResult.element;
+
+    if (element instanceof HTMLInputElement && element.type === "radio" && element.name) {
+      if (filledRadioGroups.has(element.name)) {
+        console.debug("[infill fill] skipped duplicate radio group", {
+          ...toFillDebugMapping(mapping),
+          radioGroup: element.name
+        });
+        skippedFieldIds.push(mapping.fieldId);
+        skippedFields.push({ fieldId: mapping.fieldId, reason: "Radio group already filled" });
+        continue;
+      }
+
+      filledRadioGroups.add(element.name);
+    }
 
     await moveCursorToElement(cursor, element);
     focusElement(element);
@@ -216,7 +231,12 @@ function isUnknownPlaceholderValue(value: FieldMapping["value"]): boolean {
     return false;
   }
 
-  const normalized = value.trim().toLowerCase().replace(/[.\s_-]+$/g, "");
+  const trimmed = value.trim();
+  if (/^\[[a-z0-9_.\-\s]+\]$/i.test(trimmed)) {
+    return true;
+  }
+
+  const normalized = trimmed.toLowerCase().replace(/[.\s_-]+$/g, "");
   const words = normalized.split(/\s+/).filter(Boolean);
   return words.length <= 8 && /\b(unknown|none|null|n\/a|na|not applicable|not provided|not specified|unspecified|missing|no answer|i don't know|i do not know|dont know|don't know)\b/i.test(normalized);
 }

@@ -92,6 +92,14 @@ type AutoFillDebugResult = {
   skippedFields: Array<{ fieldId: string; reason: string }>;
 };
 
+type CachedFieldMapping = {
+  fingerprint: string;
+  mapping: FieldMapping;
+};
+
+const tabMappingCache = new Map<number, Map<string, CachedFieldMapping>>();
+const tabMappingCacheScope = new Map<number, string>();
+
 export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   const store = useScanStore.getState();
 
@@ -241,6 +249,24 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
 
   const cloudState = useCloudStore.getState().getCloudState();
   const allFields = allForms.flatMap((form) => form.fields);
+  resetFieldMappingCacheForNewScope(tabId, tabUrl);
+  const fieldMappingCache = getFieldMappingCache(tabId);
+  const cachedMappingsByFieldId = new Map<string, FieldMapping>();
+  const uncachedForms = allForms
+    .map((form) => ({
+      ...form,
+      fields: form.fields.filter((field) => {
+        const cached = fieldMappingCache.get(fieldFingerprint(field));
+        if (!cached) {
+          return true;
+        }
+
+        cachedMappingsByFieldId.set(field.fieldId, retargetCachedMapping(cached.mapping, field.fieldId));
+        return false;
+      })
+    }))
+    .filter((form) => form.fields.length > 0);
+  const uncachedFields = uncachedForms.flatMap((form) => form.fields);
   const canUseCloudAssist = cloudState.auth?.account.subscription.plan === "pro" &&
     (
       cloudState.auth.account.subscription.status === "active" ||
@@ -252,10 +278,10 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   const shouldUseLocalAssist = Boolean(cloudState.config.localOllamaEnabled);
   let llmKeyMatcherDebug: LlmKeyMatcherDebug | undefined;
   let resolverOptions: ProfileFactResolverOptions = {};
-  if (cloudState.config.enableLlmKeyMatcherFallback && (shouldUseLocalAssist || shouldUseCloudAssist)) {
+  if (uncachedFields.length > 0 && cloudState.config.enableLlmKeyMatcherFallback && (shouldUseLocalAssist || shouldUseCloudAssist)) {
     const keyMatcherProvider = shouldUseCloudAssist ? "cloud" : "ollama";
     debugLog("[scanTab] building LLM key matcher resolver options...", keyMatcherProvider);
-    const keyMatcher = await buildLlmKeyMatcherResolverOptions(allFields, facts, keyMatcherProvider);
+    const keyMatcher = await buildLlmKeyMatcherResolverOptions(uncachedFields, facts, keyMatcherProvider);
     resolverOptions = keyMatcher?.resolverOptions ?? {};
     llmKeyMatcherDebug = keyMatcher?.debug;
     if (llmKeyMatcherDebug?.status === "error") {
@@ -276,7 +302,8 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   // Map fields to profile facts
   debugLog("[scanTab] mapping fields to profile facts...");
   debugLog("[scanTab] profile facts keys=", facts.map((f) => `${f.key}=${String(f.value).slice(0, 30)}`).join(", "));
-  let nextMappings = allForms.flatMap((form) => mapFieldsToProfile(form.fields, facts, resolverOptions));
+  let freshMappings = uncachedForms.flatMap((form) => mapFieldsToProfile(form.fields, facts, resolverOptions));
+  let nextMappings = mergeMappingsWithCache(allFields, freshMappings, cachedMappingsByFieldId);
   debugLog("[scanTab] local mappings count=", nextMappings.length);
   for (const m of nextMappings) {
     debugLog(`[scanTab] field=${m.fieldId} key=${m.profileKey} source=${m.valueSource} value=${String(m.value ?? "").slice(0, 50)} preselected=${m.preselected} reason=${m.reason} usedFactIds=${(m.usedFactIds ?? []).join(",") || "none"} warnings=${(m.warnings ?? []).join("|") || "none"}`);
@@ -288,19 +315,22 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   let assistStatusSuffix = "";
   let assistUsed = false;
   const assistRequest: CloudAssistRequest = {
-    forms: sanitizeFormsForCloud(allForms),
+    forms: sanitizeFormsForCloud(uncachedForms),
     facts: facts.filter((fact) => fact.sensitivity === "public" || fact.sensitivity === "normal"),
-    localMappings: nextMappings,
+    localMappings: freshMappings,
     requestedAt: new Date().toISOString(),
     locale: "en",
   };
 
-  if (shouldUseLocalAssist) {
+  if (uncachedFields.length === 0) {
+    assistStatusSuffix = "Cached fill ready";
+  } else if (shouldUseLocalAssist) {
     try {
       debugLog("[scanTab] calling runLocalAssist...");
       const assisted = await runLocalAssist(assistRequest);
       debugLog("[scanTab] localAssist result source=", assisted.source, "mappings=", assisted.mappings?.length);
-      nextMappings = assisted.mappings;
+      freshMappings = assisted.mappings;
+      nextMappings = mergeMappingsWithCache(allFields, freshMappings, cachedMappingsByFieldId);
       assistUsed = true;
       assistStatusSuffix = assisted.source === "local_model" ? "Local AI assist ready" : "Local fallback ready";
     } catch (assistError) {
@@ -311,7 +341,8 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
           debugLog("[scanTab] local failed; calling runCloudAssist because fallback is enabled...");
           const assisted = await runCloudAssist(assistRequest);
           debugLog("[scanTab] cloudAssist fallback result source=", assisted.source, "mappings=", assisted.mappings?.length);
-          nextMappings = assisted.mappings;
+          freshMappings = assisted.mappings;
+          nextMappings = mergeMappingsWithCache(allFields, freshMappings, cachedMappingsByFieldId);
           assistUsed = true;
           assistStatusSuffix = assisted.source === "cloud_model" ? "Cloud assist ready" : "Local fallback ready";
         } catch (cloudError) {
@@ -324,7 +355,8 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
       debugLog("[scanTab] calling runCloudAssist...");
       const assisted = await runCloudAssist(assistRequest);
       debugLog("[scanTab] cloudAssist result source=", assisted.source, "mappings=", assisted.mappings?.length);
-      nextMappings = assisted.mappings;
+      freshMappings = assisted.mappings;
+      nextMappings = mergeMappingsWithCache(allFields, freshMappings, cachedMappingsByFieldId);
       assistUsed = true;
       assistStatusSuffix = assisted.source === "cloud_model" ? "Cloud assist ready" : "Local fallback ready";
     } catch (assistError) {
@@ -342,6 +374,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
 
   debugLog("[scanTab] DONE â€” finalStatus=", finalStatus, "mappings=", nextMappings.length);
   const finalMappings = nextMappings.map(normalizeReviewMapping);
+  rememberFieldMappings(tabId, allForms, finalMappings);
   const scannedAt = new Date().toISOString();
   const initialDebug = buildScanDebug({
     forms: allForms,
@@ -424,6 +457,101 @@ export async function autoFillAndOverlay(tabId: number, forms: ExtractedForm[], 
   }
 
   return { filledFieldIds, skippedFields };
+}
+
+function getFieldMappingCache(tabId: number): Map<string, CachedFieldMapping> {
+  const existing = tabMappingCache.get(tabId);
+  if (existing) {
+    return existing;
+  }
+
+  const next = new Map<string, CachedFieldMapping>();
+  tabMappingCache.set(tabId, next);
+  return next;
+}
+
+function resetFieldMappingCacheForNewScope(tabId: number, tabUrl: string): void {
+  const scope = fieldMappingCacheScope(tabUrl);
+  if (tabMappingCacheScope.get(tabId) === scope) {
+    return;
+  }
+
+  tabMappingCacheScope.set(tabId, scope);
+  tabMappingCache.delete(tabId);
+}
+
+function fieldMappingCacheScope(tabUrl: string): string {
+  try {
+    const parsed = new URL(tabUrl);
+    return `${parsed.origin}${parsed.pathname}${parsed.hash.split("?")[0]}`;
+  } catch {
+    return tabUrl;
+  }
+}
+
+function mergeMappingsWithCache(
+  fields: ExtractedForm["fields"],
+  freshMappings: FieldMapping[],
+  cachedMappingsByFieldId: Map<string, FieldMapping>
+): FieldMapping[] {
+  const freshByFieldId = new Map(freshMappings.map((mapping) => [mapping.fieldId, mapping]));
+  return fields.flatMap((field) => {
+    const mapping = cachedMappingsByFieldId.get(field.fieldId) ?? freshByFieldId.get(field.fieldId);
+    return mapping ? [mapping] : [];
+  });
+}
+
+function rememberFieldMappings(tabId: number, forms: ExtractedForm[], mappings: FieldMapping[]): void {
+  const cache = getFieldMappingCache(tabId);
+  const fieldById = new Map(forms.flatMap((form) => form.fields.map((field) => [field.fieldId, field])));
+
+  for (const mapping of mappings) {
+    if (mapping.value === undefined) {
+      continue;
+    }
+
+    const field = fieldById.get(mapping.fieldId);
+    if (!field) {
+      continue;
+    }
+
+    const fingerprint = fieldFingerprint(field);
+    cache.set(fingerprint, {
+      fingerprint,
+      mapping: {
+        ...mapping,
+        fieldId: fingerprint
+      }
+    });
+  }
+}
+
+function retargetCachedMapping(mapping: FieldMapping, fieldId: string): FieldMapping {
+  return {
+    ...mapping,
+    fieldId,
+    reason: mapping.reason.startsWith("Cached: ") ? mapping.reason : `Cached: ${mapping.reason}`
+  };
+}
+
+function fieldFingerprint(field: ExtractedForm["fields"][number]): string {
+  return [
+    field.frameId ?? "",
+    field.tagName,
+    field.inputType ?? "",
+    field.role ?? "",
+    field.name ?? "",
+    field.id ?? "",
+    normalizeFingerprintText(field.labelText),
+    normalizeFingerprintText(field.ariaLabel),
+    normalizeFingerprintText(field.placeholder),
+    field.autocomplete ?? "",
+    field.options.map((option) => normalizeFingerprintText(option.value || option.label)).join(",")
+  ].join("|");
+}
+
+function normalizeFingerprintText(value: string | undefined): string {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 async function ensureProfileStoreHydrated(): Promise<void> {

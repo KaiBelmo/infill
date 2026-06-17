@@ -78,6 +78,25 @@ export function groupControlsIntoForms(controls: SupportedControl[]): ControlGro
   }));
 }
 
+export function getFillTargetControls(controls: SupportedControl[]): SupportedControl[] {
+  const seenRadioGroups = new Set<string>();
+  const result: SupportedControl[] = [];
+
+  for (const control of controls) {
+    if (control instanceof HTMLInputElement && control.type === "radio" && control.name) {
+      if (seenRadioGroups.has(control.name)) {
+        continue;
+      }
+
+      seenRadioGroups.add(control.name);
+    }
+
+    result.push(control);
+  }
+
+  return result;
+}
+
 export function extractField(
   element: SupportedControl,
   index: number,
@@ -99,7 +118,7 @@ export function extractField(
     className: getClassName(element),
     dataAttributes: getDataAttributes(element),
     autocomplete: element.getAttribute("autocomplete") ?? undefined,
-    labelText: getLabelText(element),
+    labelText: getFieldLabelText(element),
     ariaLabel: element.getAttribute("aria-label") ?? undefined,
     ariaDescription: element.getAttribute("aria-description") ?? undefined,
     placeholder: getPlaceholder(element),
@@ -210,6 +229,31 @@ function getLabelText(element: HTMLElement): string | undefined {
     if (label) {
       return trimText(label, 160);
     }
+  }
+
+  return undefined;
+}
+
+function getFieldLabelText(element: HTMLElement): string | undefined {
+  if (element instanceof HTMLInputElement && element.type === "radio" && element.name) {
+    return getRadioGroupLabel(element) ?? getLabelText(element);
+  }
+
+  return getLabelText(element);
+}
+
+function getRadioGroupLabel(element: HTMLInputElement): string | undefined {
+  const fieldset = element.closest("fieldset");
+  const legend = fieldset?.querySelector("legend");
+  if (legend?.textContent) {
+    return trimText(legend.textContent, 160);
+  }
+
+  const optionLabel = element.closest("label");
+  const choiceContainer = optionLabel?.parentElement;
+  const groupLabel = choiceContainer?.previousElementSibling;
+  if (groupLabel?.tagName.toLowerCase() === "label" && groupLabel.textContent) {
+    return trimText(groupLabel.textContent, 160);
   }
 
   return undefined;

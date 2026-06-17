@@ -1,5 +1,5 @@
 ﻿import type { ExtractedForm } from "@infill/shared";
-import { buildScanWarningsFromSkippedInvisibleCount, extractField, findControls, groupControlsIntoForms } from "./scanner/extract";
+import { buildScanWarningsFromSkippedInvisibleCount, extractField, findControls, getFillTargetControls, groupControlsIntoForms } from "./scanner/extract";
 import { hashText, isDisabled, isVisible, sleep, trimText } from "./scanner/dom-utils";
 import { debugLog } from "@/shared/debug-log";
 
@@ -36,7 +36,9 @@ async function scanOnce(): Promise<{ forms: ExtractedForm[] }> {
   const forms = groups.map((group) => {
     const controlStates = group.controls
       .map((control, index) => ({ control, index, visible: isVisible(control), disabled: isDisabled(control) }));
-    const visibleControls = controlStates.filter(({ visible, disabled }) => visible && !disabled);
+    const visibleControls = getFillTargetControls(
+      controlStates.filter(({ visible, disabled }) => visible && !disabled).map(({ control }) => control)
+    );
     const skippedInvisibleCount = controlStates.filter(({ visible }) => !visible).length;
     debugLog(`Infill Scanner: Group ${group.formId} has ${group.controls.length} total fields`);
     debugLog(`Infill Scanner: Group ${group.formId} has ${visibleControls.length} visible/enabled fields`);
@@ -46,7 +48,7 @@ async function scanOnce(): Promise<{ forms: ExtractedForm[] }> {
       urlPathHash,
       pageTitle: trimText(document.title, 120),
       formTitle: group.title,
-      fields: visibleControls.map(({ control, index }) => extractField(control, index, group.formId, group.controls)),
+      fields: visibleControls.map((control, index) => extractField(control, index, group.formId, group.controls)),
       scanWarnings: buildScanWarningsFromSkippedInvisibleCount(skippedInvisibleCount),
       createdAt
     };

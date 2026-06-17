@@ -11,6 +11,7 @@ describe("fill value guards", () => {
     expect(isFillableMappingValue("none")).toBe(false);
     expect(isFillableMappingValue("N/A")).toBe(false);
     expect(isFillableMappingValue("not provided")).toBe(false);
+    expect(isFillableMappingValue("[address.city]")).toBe(false);
     expect(isFillableMappingValue("Temara")).toBe(true);
     expect(isFillableMappingValue(false)).toBe(true);
   });

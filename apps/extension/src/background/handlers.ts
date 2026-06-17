@@ -300,6 +300,30 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
   return true;
 });
 
+chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
+  if (!message || typeof message !== "object" || !("type" in message)) return false;
+  const typed = message as { type?: string; url?: string };
+  if (typed.type !== "infill-rescan-current-tab") return false;
+
+  const tabId = sender.tab?.id;
+  const tabUrl = sender.tab?.url ?? typed.url;
+  if (tabId === undefined || !tabUrl) {
+    sendResponse({ ok: false });
+    return false;
+  }
+
+  const scan = useScanStore.getState();
+  if (scan.tabId === tabId && scan.status === "Scanning") {
+    sendResponse({ ok: false });
+    return false;
+  }
+
+  scanTab(tabId, tabUrl)
+    .then(() => sendResponse({ ok: true }))
+    .catch(() => sendResponse({ ok: false }));
+  return true;
+});
+
 onMessage("auth-start", async () => {
   await startAuthFlow();
   return null;

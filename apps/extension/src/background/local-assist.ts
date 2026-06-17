@@ -74,7 +74,8 @@ export async function runLocalAssist(request: CloudAssistRequest): Promise<Cloud
       localMappings: payload.localMappings,
       cachedMappings: prepared.cachedMappings,
       allFields: prepared.allFields,
-      answersByFieldId
+      answersByFieldId,
+      safeFacts: prepared.safeFacts
     });
 
     return CloudAssistResponseSchema.parse({

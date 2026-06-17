@@ -15,6 +15,9 @@ if (!globalThis.__FORM_MATE_LOADED__) {
   globalThis.__FORM_MATE_LOADED__ = true;
 
   let latestForms: ExtractedForm[] = [];
+  let latestFormSignature = "";
+  let formChangeObserver: MutationObserver | undefined;
+  let formChangeTimer: number | undefined;
 
   onMessage("ping", async () => {
     return { ok: true };
@@ -25,6 +28,7 @@ if (!globalThis.__FORM_MATE_LOADED__) {
     const response = await scanCurrentPage();
     debugLog("[contentScript] scan result forms=", response.forms.length, "total fields=", response.forms.reduce((s, f) => s + f.fields.length, 0));
     latestForms = response.forms;
+    latestFormSignature = formSignature(latestForms);
     installProfileLearning(latestForms);
     return response;
   });
@@ -43,14 +47,70 @@ if (!globalThis.__FORM_MATE_LOADED__) {
     const allFields = latestForms.flatMap((form) => form.fields);
     installOverlays(mappings, allFields);
     startOverlayWatch();
+    startFormChangeWatch();
 
     return result;
   });
 
   onMessage("remove-overlays", async () => {
     stopOverlayWatch();
+    stopFormChangeWatch();
     removeAllOverlays();
     return { ok: true };
   });
+
+  function startFormChangeWatch(): void {
+    stopFormChangeWatch();
+    formChangeObserver = new MutationObserver(() => {
+      if (formChangeTimer !== undefined) {
+        window.clearTimeout(formChangeTimer);
+      }
+
+      formChangeTimer = window.setTimeout(() => {
+        void requestRescanIfFormChanged();
+      }, 500);
+    });
+    formChangeObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function stopFormChangeWatch(): void {
+    formChangeObserver?.disconnect();
+    formChangeObserver = undefined;
+    if (formChangeTimer !== undefined) {
+      window.clearTimeout(formChangeTimer);
+      formChangeTimer = undefined;
+    }
+  }
+
+  async function requestRescanIfFormChanged(): Promise<void> {
+    formChangeTimer = undefined;
+    const response = await scanCurrentPage();
+    const nextSignature = formSignature(response.forms);
+    if (!nextSignature || nextSignature === latestFormSignature) {
+      return;
+    }
+
+    latestForms = response.forms;
+    latestFormSignature = nextSignature;
+    installProfileLearning(latestForms);
+    debugLog("[contentScript] visible form changed; requesting background rescan");
+    chrome.runtime.sendMessage({ type: "infill-rescan-current-tab", url: window.location.href }).catch(() => undefined);
+  }
+
+  function formSignature(forms: ExtractedForm[]): string {
+    return forms
+      .flatMap((form) => form.fields)
+      .map((field) => [
+        field.tagName,
+        field.inputType ?? "",
+        field.name ?? "",
+        field.id ?? "",
+        field.labelText ?? "",
+        field.ariaLabel ?? "",
+        field.placeholder ?? "",
+        field.options.map((option) => option.value).join(",")
+      ].join("|"))
+      .join("\n");
+  }
 
 } // End of initialization guard
