@@ -251,6 +251,45 @@ describe("options memory review confidence", () => {
   });
 });
 
+describe("getInitialView", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", undefined);
+  });
+
+  it("returns 'memory' when window is undefined", async () => {
+    const { getInitialView } = await import("./options-store");
+    expect(getInitialView()).toBe("memory");
+  });
+
+  it("returns appropriate views based on window.location.hash", async () => {
+    const { getInitialView } = await import("./options-store");
+
+    vi.stubGlobal("window", { location: { hash: "#/profile" } });
+    expect(getInitialView()).toBe("profile");
+
+    vi.stubGlobal("window", { location: { hash: "#profile" } });
+    expect(getInitialView()).toBe("profile");
+
+    vi.stubGlobal("window", { location: { hash: "#/facts" } });
+    expect(getInitialView()).toBe("facts");
+
+    vi.stubGlobal("window", { location: { hash: "#facts" } });
+    expect(getInitialView()).toBe("facts");
+
+    vi.stubGlobal("window", { location: { hash: "#/sync" } });
+    expect(getInitialView()).toBe("sync");
+
+    vi.stubGlobal("window", { location: { hash: "#sync" } });
+    expect(getInitialView()).toBe("sync");
+
+    vi.stubGlobal("window", { location: { hash: "#/memory" } });
+    expect(getInitialView()).toBe("memory");
+
+    vi.stubGlobal("window", { location: { hash: "" } });
+    expect(getInitialView()).toBe("memory");
+  });
+});
+
 function fact(id: string, label: string, value: string): ProfileFact {
   return {
     id,

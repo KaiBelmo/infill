@@ -3,7 +3,7 @@ import type { ExtensionState } from "@/shared/types";
 import { useProfileStore } from "@/background/profile-store";
 import { useSyncEncryptionStore } from "@/background/sync-encryption-store";
 import { normalizeCloudMessage, useCloudClientStore } from "@/shared/stores/cloud-client-store";
-import { useOptionsStore, type ReviewableFact, type SettingsView } from "../options-store";
+import { useOptionsStore, getInitialView, type ReviewableFact, type SettingsView } from "../options-store";
 import { debugLog } from "@/shared/debug-log";
 import { useShallow } from "zustand/react/shallow";
 
@@ -261,6 +261,38 @@ export function useOptionsState() {
     }
     memoryInputHadTextRef.current = true;
   }, [activeView, canParseWithLlm, cloudConfigLoaded, memoryText, parserNotice]);
+
+  // Sync tab state when URL hash changes (e.g. browser navigation)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const view = getInitialView();
+      if (view !== activeView) {
+        actions.setActiveView(view);
+      }
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [activeView, actions.setActiveView]);
+
+  // Sync URL hash when activeView changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const targetHash = `#/${activeView}`;
+      if (window.location.hash !== targetHash) {
+        window.location.hash = targetHash;
+      }
+    }
+  }, [activeView]);
+
+  // Redirect to profile page if user is logged in and has profile data, and no specific hash is set
+  useEffect(() => {
+    const hash = window.location.hash;
+    const hasSpecificHash = hash === "#/profile" || hash === "#/facts" || hash === "#/sync" || hash === "#/memory" ||
+                            hash === "#profile" || hash === "#facts" || hash === "#sync" || hash === "#memory";
+    if (!hasSpecificHash && isSignedIn && facts.length > 0) {
+      actions.setActiveView("profile");
+    }
+  }, [isSignedIn, facts.length, actions.setActiveView]);
 
   return {
     activeView, setActiveView: actions.setActiveView,

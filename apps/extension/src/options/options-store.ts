@@ -16,6 +16,16 @@ export type ReviewableFact = MemoryFactDraft & {
 
 export type SettingsView = "memory" | "profile" | "facts" | "sync";
 
+export function getInitialView(): SettingsView {
+  if (typeof window === "undefined") return "memory";
+  const hash = window.location.hash;
+  if (hash === "#/profile" || hash === "#profile") return "profile";
+  if (hash === "#/facts" || hash === "#facts") return "facts";
+  if (hash === "#/sync" || hash === "#sync") return "sync";
+  if (hash === "#/memory" || hash === "#memory") return "memory";
+  return "memory";
+}
+
 type ClearedFactsUndo = {
   type: "cleared_facts";
   profileId: string;
@@ -80,7 +90,7 @@ type OptionsActions = {
 
 
 export const useOptionsStore = create<OptionsState & OptionsActions>()((set, get) => ({
-  activeView: "memory",
+  activeView: getInitialView(),
   memoryText: "",
   detectedFacts: [],
   newProfileName: "",
