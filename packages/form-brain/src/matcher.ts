@@ -361,7 +361,7 @@ const profileKeyPatterns: Record<string, PatternConfig> = {
     strong: ["product hunt", "producthunt", "product hunt profile", "producthunt profile"]
   },
   "company.name": {
-    strong: ["company name", "business name", "organization", "organisation", "employer"],
+    strong: ["company name", "current company", "current employer", "business name", "organization", "organisation", "employer"],
     weak: ["company"]
   },
   "work.current_title": {
