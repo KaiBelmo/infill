@@ -1174,6 +1174,30 @@ describe("field matcher", () => {
     })).toBe("company.name");
   });
 
+  it("routes current company to a learnable company fact", () => {
+    const field = {
+      fieldId: "current-company",
+      formId: "form",
+      tagName: "input" as const,
+      inputType: "text",
+      labelText: "Current company",
+      required: false,
+      disabled: false,
+      readonly: false,
+      visible: true,
+      hasUserValue: false,
+      domPathHint: "input#current-company",
+      options: []
+    };
+
+    expect(findProfileKey(field)).toBe("company.name");
+
+    const mapping = mapFieldToProfile(field, []);
+    expect(mapping.profileKey).toBe("company.name");
+    expect(mapping.valueSource).toBe("none");
+    expect(mapping.value).toBeUndefined();
+  });
+
   it("does not route long-form company interest prompts to company name", () => {
     const mapping = mapFieldToProfile(
       {
