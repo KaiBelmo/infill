@@ -1,6 +1,7 @@
 import "./handlers";
 import { handlePossibleAuthCallback } from "./auth";
 import { updateConflictBadge } from "./handlers";
+import { LOCAL_PROFILE_STATE_KEY } from "./profile-store";
 import { removeOverlays } from "./scan";
 import { useScanStore } from "./scan-store";
 
@@ -23,6 +24,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
 // Keep badge in sync when another context resolves conflicts
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || !("infillExtensionProfileState" in changes)) return;
+  if (areaName !== "local" || !(LOCAL_PROFILE_STATE_KEY in changes)) return;
   updateConflictBadge();
 });
