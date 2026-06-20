@@ -1,8 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { createProfileFact, listProfileFacts, normalizeProfileKey } from "@infill/profile-vault";
+import { createProfileFact, normalizeProfileKey } from "@infill/profile-vault";
 import type { CloudProfile, FillProfile, ProfileCategory, ProfileFact, ProfileSyncAction, ProfileSyncConflictAction, ProfileSyncPreview, Sensitivity } from "@infill/shared";
-import { ProfileFactSchema } from "@infill/shared";
 import type { ExtensionState, FactDraft, LearnedFactConflict, LearnedFactUndo } from "@/shared/types";
 
 export const LOCAL_PROFILE_STATE_KEY = "infillExtensionProfileState";
@@ -538,19 +537,12 @@ export const useProfileStore = create<StoredExtensionState & ProfileStoreActions
       name: LOCAL_PROFILE_STATE_KEY,
       storage: createJSONStorage(() => chromeStorageAdapter()),
       onRehydrateStorage: () => {
-        return async (state, error) => {
-          if (error) return;
-          if (state) {
-            const cleaned = sanitizeStoredProfileState(state);
-            if (cleaned.changed) {
-              useProfileStore.setState(cleaned.state);
-            }
-            return;
+        return (state, error) => {
+          if (error || !state) return;
+          const cleaned = sanitizeStoredProfileState(state);
+          if (cleaned.changed) {
+            useProfileStore.setState(cleaned.state);
           }
-          // No persisted state found — try legacy migration
-          const legacyFacts = await listProfileFacts().catch(() => []);
-          const migrated = createDefaultState(legacyFacts.map((fact) => ProfileFactSchema.parse(fact)));
-          useProfileStore.setState(migrated);
         };
       },
       version: 1,
