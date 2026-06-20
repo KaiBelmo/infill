@@ -12,9 +12,8 @@ import {
   type UpsertProfileFactResult
 } from "./vaultState";
 
-const dbName = "form_mate_v1";
+const dbName = "infill_v1";
 const dbVersion = 2;
-const profileFactsStore = "profileFacts";
 const vaultStoreName = "profileVault";
 const vaultRecordKey = "local-profile-vault";
 
@@ -203,34 +202,12 @@ function openVaultDb(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       const db = request.result;
 
-      if (!db.objectStoreNames.contains(profileFactsStore)) {
-        const factsStore = db.createObjectStore(profileFactsStore, { keyPath: "id" });
-        factsStore.createIndex("key", "key", { unique: false });
-        factsStore.createIndex("category", "category", { unique: false });
-        factsStore.createIndex("sensitivity", "sensitivity", { unique: false });
-      }
-
       if (!db.objectStoreNames.contains(vaultStoreName)) {
-        db.createObjectStore(vaultStoreName);
-      }
-
-      const transaction = request.transaction;
-      if (!transaction) {
-        return;
-      }
-
-      const vaultStore = transaction.objectStore(vaultStoreName);
-      const factsStore = transaction.objectStore(profileFactsStore);
-      const legacyFactsRequest = factsStore.getAll();
-
-      legacyFactsRequest.onsuccess = () => {
-        const legacyFacts = Array.isArray(legacyFactsRequest.result)
-          ? legacyFactsRequest.result.map((fact) => ProfileFactSchema.parse(fact))
-          : [];
-        const bundle = createDefaultProfileBundle(legacyFacts);
+        const vaultStore = db.createObjectStore(vaultStoreName);
+        const bundle = createDefaultProfileBundle();
         const vault = createLocalProfileVault([bundle], bundle.id);
         vaultStore.put(vault, vaultRecordKey);
-      };
+      }
     };
 
     request.onerror = () => reject(request.error);
