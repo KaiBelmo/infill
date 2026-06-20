@@ -50,13 +50,14 @@ export function buildAssistPromptMessages(
         "Return one JSON object with an `answers` array.",
         "Each answer must have `fieldId` and either `value` or be omitted entirely if you cannot answer safely.",
         "Generate answers for unresolved web form fields using the field metadata, valid options, and locale.",
-        "You are not given raw profile values. Use only field context and the available profile topics.",
+        "Use the provided profile context to decide which bracketed placeholders can be requested.",
         "For long-form text fields, write concise first-person draft text.",
+        "When an answer needs a profile detail, write a bracketed placeholder using the exact profile label, such as [Email].",
         "For select, radio, or checkbox-style fields, choose only from the provided exact option values.",
-        "If a field needs personal specifics you do not know, use neutral placeholders in square brackets instead of inventing details.",
+        "If a field needs personal specifics that are not present in profileContext, omit that detail instead of inventing it.",
         "Respect locale for formatting dates, phones, addresses, and regional wording whenever field context requires it.",
         "Never suggest passwords, payment details, government IDs, API keys, or secret values.",
-        "Never fill structured profile fields (name, email, phone, address) - those are handled locally.",
+        "Never invent structured profile fields (name, email, phone, address) beyond the provided profileContext.",
         "Example: {\"answers\":[{\"fieldId\":\"field_cover_letter\",\"value\":\"I am excited to apply because [relevant experience].\"},{\"fieldId\":\"field_work_auth\",\"value\":\"yes\"}]}",
         "Do not wrap the JSON in markdown fences."
       ].join(" ")
@@ -85,7 +86,10 @@ export function mergeAssistAnswersWithLocal(input: {
   cachedMappings: Map<string, FieldMapping>;
   allFields: ExtractedField[];
   answersByFieldId: Map<string, AssistAnswer>;
+  safeFacts?: ProfileFact[];
 }): FieldMapping[] {
+  const replacementFacts = input.safeFacts ?? [];
+
   return input.localMappings.map((mapping) => {
     const cached = input.cachedMappings.get(mapping.fieldId);
     if (cached) {
@@ -106,15 +110,17 @@ export function mergeAssistAnswersWithLocal(input: {
       return mapping;
     }
 
+    const value = replaceBracketPlaceholders(answer.value, replacementFacts);
+
     return {
       ...mapping,
-      value: answer.value,
+      value,
       valueSource: "generated_answer",
       confidence: Math.max(mapping.confidence, 0.65),
       preselected: mapping.risk === "safe" || mapping.risk === "personal" || mapping.risk === "unknown",
       requiresExplicitApproval: mapping.risk !== "safe" && mapping.risk !== "personal" && mapping.risk !== "unknown",
-      reason: answer.reason ?? "Model generated an answer from field context without raw profile values.",
-      warnings: [...mapping.warnings, "Model generated an answer without raw profile values."],
+      reason: answer.reason ?? "Model generated an answer from field context and non-sensitive profile values.",
+      warnings: mapping.warnings,
       usedFactIds: mapping.usedFactIds
     };
   });
@@ -314,7 +320,7 @@ export function mergeCachedWithLocal(
 }
 
 function isEligibleForAssistGeneration(field: ExtractedField, local: FieldMapping | undefined): boolean {
-  if (!local || local.valueSource !== "none" || local.risk === "secret" || local.risk === "restricted") {
+  if (!local || (local.valueSource !== "none" && local.valueSource !== "generated_answer") || local.risk === "secret" || local.risk === "restricted") {
     return false;
   }
 
@@ -366,7 +372,53 @@ function describePromptValue(value: ProfileFact["value"]): "missing" | "text" | 
 }
 
 function isUnknownPlaceholderValue(value: string): boolean {
-  const normalized = value.trim().toLowerCase().replace(/[.\s_-]+$/g, "");
+  const trimmed = value.trim();
+  const normalized = trimmed.toLowerCase().replace(/[.\s_-]+$/g, "");
   const words = normalized.split(/\s+/).filter(Boolean);
   return words.length <= 8 && /\b(unknown|none|null|n\/a|na|not applicable|not provided|not specified|unspecified|missing|no answer|i don't know|i do not know|dont know|don't know)\b/i.test(normalized);
+}
+
+function replaceBracketPlaceholders(value: FieldMapping["value"], facts: ProfileFact[]): FieldMapping["value"] {
+  if (typeof value === "string") {
+    return replaceBracketPlaceholdersInText(value, facts);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => replaceBracketPlaceholdersInText(item, facts));
+  }
+
+  return value;
+}
+
+function replaceBracketPlaceholdersInText(text: string, facts: ProfileFact[]): string {
+  return text.replace(/\[([^\]\r\n]{1,80})\]/g, (token, rawLabel: string) => {
+    const replacement = findPlaceholderFactValue(rawLabel, facts);
+    return replacement ?? token;
+  });
+}
+
+function findPlaceholderFactValue(label: string, facts: ProfileFact[]): string | undefined {
+  const normalizedLabel = normalizePlaceholderKey(label);
+  if (!normalizedLabel) {
+    return undefined;
+  }
+
+  const fact = facts.find((candidate) =>
+    normalizePlaceholderKey(candidate.key) === normalizedLabel ||
+    normalizePlaceholderKey(candidate.label) === normalizedLabel
+  );
+  if (!fact) {
+    return undefined;
+  }
+
+  const value = normalizeFactValue(fact.value);
+  if (value === undefined || typeof value === "boolean") {
+    return undefined;
+  }
+
+  return Array.isArray(value) ? value.join(", ") : String(value);
+}
+
+function normalizePlaceholderKey(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
