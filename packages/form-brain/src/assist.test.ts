@@ -29,6 +29,7 @@ describe("assist helpers", () => {
     expect(answers.has("na")).toBe(false);
     expect(answers.has("unknown_url")).toBe(false);
     expect(answers.has("url_unknown")).toBe(false);
+    expect(parseAssistAnswers("{\"answers\":[{\"fieldId\":\"city\",\"value\":\"[address.city]\"}]}").get("city")?.value).toBe("[address.city]");
     expect(answers.get("mixed")?.value).toEqual(["github.com/example"]);
     expect(answers.has("only_placeholders")).toBe(false);
   });
@@ -37,8 +38,10 @@ describe("assist helpers", () => {
     const request = createAssistRequest();
     const prepared = prepareAssistInput(request);
 
-    expect(prepared.safeFacts.map((fact) => fact.id)).toEqual(["fact_public"]);
+    expect(prepared.safeFacts.map((fact) => fact.id)).toEqual(["fact_public", "fact_city", "fact_goal"]);
     expect(prepared.llmFields.map((field) => field.fieldId)).toEqual(["field_long"]);
+    expect(prepared.promptMessages[1]?.content).toContain("Email");
+    expect(prepared.promptMessages[1]?.content).not.toContain("ada@example.com");
     expect(prepared.promptMessages[1]?.content).not.toContain("Ada Lovelace");
     expect(prepared.cachedMappings.get("field_email")?.value).toBe("ada@example.com");
   });
@@ -77,15 +80,17 @@ describe("assist helpers", () => {
       allFields: prepared.allFields,
       answersByFieldId: parseAssistAnswers(JSON.stringify({
         answers: [
-          { fieldId: "field_long", value: "Generated draft." },
+          { fieldId: "field_long", value: "I am based in [address.city] and focused on [Work Career Goal]." },
           { fieldId: "field_secret", value: "should not apply" }
         ]
-      }))
+      })),
+      safeFacts: prepared.safeFacts
     });
 
     const byId = new Map(merged.map((mapping) => [mapping.fieldId, mapping]));
     expect(byId.get("field_email")?.valueSource).toBe("profile_fact");
     expect(byId.get("field_long")?.valueSource).toBe("generated_answer");
+    expect(byId.get("field_long")?.value).toBe("I am based in Temara and focused on backend platform engineering.");
     expect(byId.get("field_long")?.preselected).toBe(true);
     expect(byId.get("field_secret")?.value).toBeUndefined();
   });
@@ -152,6 +157,34 @@ function createAssistRequest(): CloudAssistRequest {
         label: "Email",
         value: "ada@example.com",
         category: "contact",
+        sensitivity: "normal",
+        source: "manual",
+        verified: true,
+        confidence: 1,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+        sourceRefs: []
+      },
+      {
+        id: "fact_city",
+        key: "address.city",
+        label: "City",
+        value: "Temara",
+        category: "address",
+        sensitivity: "normal",
+        source: "manual",
+        verified: true,
+        confidence: 1,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+        sourceRefs: []
+      },
+      {
+        id: "fact_goal",
+        key: "custom.work_career_goal",
+        label: "Work Career Goal",
+        value: "backend platform engineering",
+        category: "custom",
         sensitivity: "normal",
         source: "manual",
         verified: true,
