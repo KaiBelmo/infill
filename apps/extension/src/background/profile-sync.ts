@@ -1,5 +1,5 @@
 import type { CloudProfile, ProfileFact, ProfileSyncAction, ProfileSyncConflictAction, ProfileSyncPreview, EncryptedCloudProfileEnvelope } from "@infill/shared";
-import { CloudProfileSchema, ProfileFactSchema } from "@infill/shared";
+import { ProfileFactSchema } from "@infill/shared";
 import { getCloudState, listCloudProfiles, listEncryptedCloudProfiles, saveCloudProfileMetadata, saveEncryptedCloudProfiles } from "./cloud";
 import { persistProfileStoreNow, type LocalProfileRecord, useProfileStore } from "./profile-store";
 import { createProfileSyncPreview } from "./profile-sync-core";
@@ -274,17 +274,6 @@ function profileFromMetadataAndEncryptedPayload(
   decrypted: unknown,
   metadataProfiles: CloudProfile[]
 ): CloudProfile {
-  const legacyProfile = CloudProfileSchema.safeParse(decrypted);
-  if (legacyProfile.success) {
-    const metadata = metadataProfiles.find((profile) => profile.id === envelope.id);
-    return {
-      ...legacyProfile.data,
-      ...(metadata ? metadataForCloudProfile(metadata) : {}),
-      id: envelope.id,
-      facts: legacyProfile.data.facts
-    };
-  }
-
   const facts = parseEncryptedFactsPayload(decrypted);
   const metadata = metadataProfiles.find((profile) => profile.id === envelope.id);
   if (!metadata) {
