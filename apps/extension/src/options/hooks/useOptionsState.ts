@@ -9,6 +9,8 @@ import { useShallow } from "zustand/react/shallow";
 
 export type { ReviewableFact, SettingsView };
 
+const AUTH_ERROR_KEY = "infillAuthError";
+
 type ProfileStateSlice = Pick<
   ReturnType<typeof useProfileStore.getState>,
   "activeProfileId" | "profiles" | "pendingConflicts" | "pendingProfileSync" | "recentLearnedCount" | "recentLearnedUndos"
@@ -196,14 +198,14 @@ export function useOptionsState() {
   }, []);
 
   useEffect(() => {
-    chrome.storage.session.get("infillAuthError").then((result) => {
-      const message = result.infillAuthError;
+    chrome.storage.session.get(AUTH_ERROR_KEY).then((result) => {
+      const message = result[AUTH_ERROR_KEY];
       if (typeof message !== "string" || !message.trim()) return;
       const normalizedMessage = normalizeCloudMessage(message);
       cloudActions.setCloudMessage(normalizedMessage);
       actions.setStatus(normalizedMessage, "error");
       actions.setActiveView("profile");
-      void chrome.storage.session.remove("infillAuthError");
+      void chrome.storage.session.remove(AUTH_ERROR_KEY);
     }).catch(() => undefined);
   }, []);
 
