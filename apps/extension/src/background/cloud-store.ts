@@ -4,8 +4,6 @@ import type { CloudAuthState, CloudConfig, CloudState } from "@/shared/types";
 
 const LOCAL_CLOUD_STATE_KEY = "infillCloudState";
 const SESSION_TOKENS_KEY = "infillCloudSessionTokens";
-const LEGACY_CONFIG_KEY = "infillCloudConfig";
-const LEGACY_AUTH_KEY = "infillCloudAuth";
 
 
 type CloudStoreActions = {
@@ -161,29 +159,6 @@ export const useCloudStore = create<CloudState & CloudStoreActions>()(
           }
         } satisfies CloudState;
       },
-      onRehydrateStorage: () => {
-        return async (state, error) => {
-          if (error || state) return;
-          // No persisted state found under new key — try legacy migration
-          const legacy = await chrome.storage.local.get([LEGACY_CONFIG_KEY, LEGACY_AUTH_KEY]);
-          const legacyConfig = legacy[LEGACY_CONFIG_KEY] as CloudConfig | undefined;
-          const legacyAuth = legacy[LEGACY_AUTH_KEY] as Omit<CloudAuthState, "sessionToken" | "refreshToken"> & { sessionToken: string; refreshToken: string } | undefined;
-
-          if (!legacyConfig && !legacyAuth) return;
-
-          const migrated: CloudState = {
-            config: {
-              ...defaultConfig(),
-              ...(legacyConfig ?? {})
-            },
-            auth: legacyAuth ? { ...legacyAuth, sessionToken: "", refreshToken: "" } : undefined
-          };
-          useCloudStore.setState(migrated);
-
-          // Clean up orphaned legacy keys
-          await chrome.storage.local.remove([LEGACY_CONFIG_KEY, LEGACY_AUTH_KEY]);
-        };
-      }
     }
   )
 );
