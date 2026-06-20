@@ -3,6 +3,7 @@ import { prepareProfileSyncAfterAuth } from "./profile-sync";
 
 const AUTH_STATE_KEY = "infillAuthState";
 const AUTH_CODE_VERIFIER_KEY = "infillAuthCodeVerifier";
+const AUTH_ERROR_KEY = "infillAuthError";
 
 export async function startAuthFlow(): Promise<void> {
   const state = crypto.randomUUID();
@@ -120,7 +121,7 @@ export async function handlePossibleAuthCallback(tabId: number, rawUrl: string):
   } catch (error) {
     console.error("[auth] OAuth callback failed:", error);
     const message = error instanceof Error ? error.message : "Sign-in failed. Try again.";
-    await chrome.storage.session.set({ infillAuthError: message });
+    await chrome.storage.session.set({ [AUTH_ERROR_KEY]: message });
     await openOptionsProfile(tabId);
   } finally {
     if (shouldClearTemporaryAuthState) {
