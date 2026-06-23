@@ -203,19 +203,19 @@ export function MemoryView({
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-2">
                 <button
-                  className={!hasAnySavedFacts ? primaryButtonClass : secondaryButtonClass}
-                  type="button"
-                  onClick={() => setShowPromptModal(true)}
-                >
-                  Import memory from other AI providers
-                </button>
-                <button
                   className={!hasAnySavedFacts ? secondaryButtonClass : primaryButtonClass}
                   type="button"
                   disabled={parsingWithLlm}
                   onClick={handlePrimaryMemoryAction}
                 >
                   {detectedFacts.length > 0 ? "Save approved facts" : canParseWithLlm ? parsingWithLlm ? "Parsing with AI..." : "Parse with AI" : "Review facts"}
+                </button>
+                <button
+                  className={!hasAnySavedFacts ? primaryButtonClass : secondaryButtonClass}
+                  type="button"
+                  onClick={() => setShowPromptModal(true)}
+                >
+                  Import memory from other AI providers
                 </button>
                 {canParseWithLlm && detectedFacts.length === 0 ? (
                   <button className={secondaryButtonClass} type="button" disabled={parsingWithLlm} onClick={reviewMemory}>
