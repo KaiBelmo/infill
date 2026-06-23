@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { LearnedFactConflict } from "@/shared/types";
 import type { ReviewableFact } from "../hooks/useOptionsState";
 import { inputClass, panelClass, primaryButtonClass, secondaryButtonClass, sectionHeadingLabelClass, sectionHeadingTitleClass } from "@/shared/ui-styles";
+import { AUDIT_PROMPT } from "../audit-prompt";
 
 type MemoryViewProps = {
   status: string;
@@ -60,6 +61,8 @@ export function MemoryView({
 }: MemoryViewProps) {
   const [showUncheckedSaveDialog, setShowUncheckedSaveDialog] = useState(false);
   const [activeUncheckedIndex, setActiveUncheckedIndex] = useState<number | undefined>(undefined);
+  const [showPromptModal, setShowPromptModal] = useState(false);
+  const [copied, setCopied] = useState(false);
   const uncheckedIndexes = detectedFacts
     .map((fact, index) => fact.approved ? -1 : index)
     .filter((index) => index >= 0);
@@ -195,6 +198,13 @@ export function MemoryView({
 
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-2">
+                <button
+                  className={secondaryButtonClass}
+                  type="button"
+                  onClick={() => setShowPromptModal(true)}
+                >
+                  Import memory from other AI providers
+                </button>
                 <button
                   className={primaryButtonClass}
                   type="button"
@@ -374,6 +384,53 @@ export function MemoryView({
                   </button>
                   <button className={primaryButtonClass} type="button" onClick={saveApprovedAndDiscardUnchecked}>
                     Save approved only
+                  </button>
+                </div>
+              </section>
+            </div>
+          ) : null}
+
+          {showPromptModal ? (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4 py-6" role="presentation">
+              <section
+                aria-labelledby="audit-prompt-title"
+                aria-modal="true"
+                className="grid w-full max-w-[640px] max-h-[85vh] gap-4 rounded-[16px] border border-[var(--color-line)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]"
+                role="dialog"
+              >
+                <div className="grid gap-2 overflow-hidden">
+                  <span className={sectionHeadingLabelClass}>Import helper</span>
+                  <h3 className={`${sectionHeadingTitleClass} m-0`} id="audit-prompt-title">Import memory from other AI providers</h3>
+                  <p className="m-0 text-sm leading-6 text-[var(--color-ink-soft)]">
+                    Use this prompt with other AI assistants (ChatGPT, Claude, Gemini, etc.) to get a compatible format for importing your memory.
+                  </p>
+                  
+                  <div className="mt-2 overflow-y-auto rounded-xl border border-[var(--color-line)] bg-[var(--color-mist)] p-3 font-mono text-[11px] leading-5 text-[var(--color-ink)] max-h-[45vh] whitespace-pre-wrap select-all">
+                    {AUDIT_PROMPT}
+                  </div>
+                </div>
+
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end border-t border-[var(--color-line)] pt-4 mt-2">
+                  <button
+                    className={secondaryButtonClass}
+                    type="button"
+                    onClick={() => setShowPromptModal(false)}
+                  >
+                    Close
+                  </button>
+                  <button
+                    className={primaryButtonClass}
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(AUDIT_PROMPT).then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }).catch((err) => {
+                        console.error("Could not copy prompt: ", err);
+                      });
+                    }}
+                  >
+                    {copied ? "✓ Copied!" : "Copy prompt"}
                   </button>
                 </div>
               </section>
