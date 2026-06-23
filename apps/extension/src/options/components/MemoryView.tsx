@@ -12,7 +12,7 @@ type MemoryViewProps = {
   setMemoryText: (value: string) => void;
   detectedFacts: ReviewableFact[];
   pendingConflicts: LearnedFactConflict[];
-  profiles: { id: string; name: string }[];
+  profiles: { id: string; name: string; factCount?: number }[];
   facts: { sensitivity: string }[];
   activeProfile: { name: string } | undefined;
   safeFacts: unknown[];
@@ -66,6 +66,10 @@ export function MemoryView({
   const uncheckedIndexes = detectedFacts
     .map((fact, index) => fact.approved ? -1 : index)
     .filter((index) => index >= 0);
+
+  const hasAnySavedFacts = profiles.some(
+    (profile) => typeof profile.factCount === "number" && profile.factCount > 0
+  );
 
   useEffect(() => {
     if (uncheckedIndexes.length === 0) {
@@ -199,14 +203,14 @@ export function MemoryView({
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-2">
                 <button
-                  className={secondaryButtonClass}
+                  className={!hasAnySavedFacts ? primaryButtonClass : secondaryButtonClass}
                   type="button"
                   onClick={() => setShowPromptModal(true)}
                 >
                   Import memory from other AI providers
                 </button>
                 <button
-                  className={primaryButtonClass}
+                  className={!hasAnySavedFacts ? secondaryButtonClass : primaryButtonClass}
                   type="button"
                   disabled={parsingWithLlm}
                   onClick={handlePrimaryMemoryAction}
@@ -391,46 +395,113 @@ export function MemoryView({
           ) : null}
 
           {showPromptModal ? (
-            <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4 py-6" role="presentation">
+            <div
+              className="fixed inset-0 z-50 grid place-items-center bg-black/30 px-4 py-6"
+              role="presentation"
+              onClick={(e) => { if (e.target === e.currentTarget) { setShowPromptModal(false); } }}
+            >
               <section
                 aria-labelledby="audit-prompt-title"
                 aria-modal="true"
-                className="grid w-full max-w-[640px] max-h-[85vh] gap-4 rounded-[16px] border border-[var(--color-line)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]"
+                className="grid w-full max-w-[560px] gap-0 rounded-[22px] border border-[var(--color-line)] bg-white shadow-[0_32px_80px_rgba(15,23,42,0.22)] overflow-hidden"
                 role="dialog"
               >
-                <div className="grid gap-2 overflow-hidden">
-                  <span className={sectionHeadingLabelClass}>Import helper</span>
-                  <h3 className={`${sectionHeadingTitleClass} m-0`} id="audit-prompt-title">Import memory from other AI providers</h3>
-                  <p className="m-0 text-sm leading-6 text-[var(--color-ink-soft)]">
-                    Use this prompt with other AI assistants (ChatGPT, Claude, Gemini, etc.) to get a compatible format for importing your memory.
-                  </p>
-                  
-                  <div className="mt-2 overflow-y-auto rounded-xl border border-[var(--color-line)] bg-[var(--color-mist)] p-3 font-mono text-[11px] leading-5 text-[var(--color-ink)] max-h-[45vh] whitespace-pre-wrap select-all">
-                    {AUDIT_PROMPT}
+                {/* Header */}
+                <div className="flex items-start justify-between px-6 pt-6 pb-4">
+                  <div className="grid gap-1">
+                    <h3 className="m-0 text-[20px] font-[740] tracking-[-0.03em] text-[var(--color-ink)]" id="audit-prompt-title">
+                      Import memory to Infill
+                    </h3>
+                    <p className="m-0 text-[13px] leading-5 text-[var(--color-ink-soft)]">
+                      Follow these steps to import your memory from ChatGPT, Claude, Gemini, etc.
+                    </p>
+                  </div>
+                  <button
+                    aria-label="Close dialog"
+                    className="ml-4 mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-mist)] text-[var(--color-ink-soft)] transition hover:bg-[var(--color-mist-deep)] hover:text-[var(--color-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--color-black-soft)] focus:ring-offset-2"
+                    type="button"
+                    onClick={() => { setShowPromptModal(false); }}
+                  >
+                    <svg aria-hidden="true" fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" viewBox="0 0 12 12" width="12">
+                      <path d="M1 1l10 10M11 1L1 11" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Body */}
+                <div className="grid gap-0 px-6 pb-6">
+                  {/* Step 1 */}
+                  <div className="relative pb-6 pl-8">
+                    {/* Connecting Line */}
+                    <div className="absolute left-[11px] top-7 bottom-0 w-[1.5px] bg-[var(--color-line)]" />
+
+                    <span className="absolute left-0 top-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-black-soft)] text-[11px] font-[780] text-white">
+                      1
+                    </span>
+                    <h4 className="m-0 text-[14px] font-[640] tracking-[-0.015em] text-[var(--color-ink)] leading-7">
+                      Copy this prompt into your other AI provider
+                    </h4>
+
+                    <div className="relative mt-3 rounded-[14px] border border-[var(--color-line)] bg-[var(--color-mist)] overflow-hidden">
+                      <div className="max-h-[200px] overflow-y-auto p-4 pb-12 font-mono text-[11.5px] leading-[1.65] text-[var(--color-ink-soft)] whitespace-pre-wrap select-all">
+                        {AUDIT_PROMPT}
+                      </div>
+                      <div className="absolute bottom-3 right-3">
+                        <button
+                          className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[var(--color-black-soft)] px-3.5 text-[13px] font-[640] text-white shadow-[0_4px_12px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-black-soft)] focus:ring-offset-2"
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(AUDIT_PROMPT).then(() => {
+                              setCopied(true);
+                              setTimeout(() => setCopied(false), 2000);
+                            }).catch((err) => {
+                              console.error("Could not copy prompt: ", err);
+                            });
+                          }}
+                        >
+                          {copied ? (
+                            <>
+                              <svg aria-hidden="true" fill="none" height="13" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" viewBox="0 0 13 13" width="13">
+                                <path d="M1.5 7L5 10.5l6.5-8" />
+                              </svg>
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <svg aria-hidden="true" fill="none" height="13" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 13 13" width="13">
+                                <rect height="8" rx="2" width="8" x="1" y="4" />
+                                <path d="M4 4V3a1.5 1.5 0 011.5-1.5h4A1.5 1.5 0 0111 3v5.5A1.5 1.5 0 019.5 10H9" />
+                              </svg>
+                              Copy
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="relative pl-8">
+                    <span className="absolute left-0 top-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-mist-deep)] text-[11px] font-[780] text-[var(--color-ink-soft)]">
+                      2
+                    </span>
+                    <h4 className="m-0 text-[14px] font-[640] tracking-[-0.015em] text-[var(--color-ink)] leading-7">
+                      Paste the result in "Paste profile facts"
+                    </h4>
+                    <p className="m-0 mt-2 text-[13px] leading-5 text-[var(--color-ink-soft)]">
+                      Close this dialog and paste the generated output directly into the main text area labeled "Paste profile facts" on the options page.
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end border-t border-[var(--color-line)] pt-4 mt-2">
-                  <button
-                    className={secondaryButtonClass}
-                    type="button"
-                    onClick={() => setShowPromptModal(false)}
-                  >
-                    Close
-                  </button>
+                {/* Footer */}
+                <div className="flex items-center justify-end gap-2 border-t border-[var(--color-line)] bg-[var(--color-mist)] px-6 py-4">
                   <button
                     className={primaryButtonClass}
                     type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(AUDIT_PROMPT).then(() => {
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2000);
-                      }).catch((err) => {
-                        console.error("Could not copy prompt: ", err);
-                      });
-                    }}
+                    onClick={() => { setShowPromptModal(false); }}
                   >
-                    {copied ? "✓ Copied!" : "Copy prompt"}
+                    Close
                   </button>
                 </div>
               </section>
