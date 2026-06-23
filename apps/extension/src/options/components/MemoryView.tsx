@@ -217,11 +217,6 @@ export function MemoryView({
                 >
                   Import memory from other AI providers
                 </button>
-                {canParseWithLlm && detectedFacts.length === 0 ? (
-                  <button className={secondaryButtonClass} type="button" disabled={parsingWithLlm} onClick={reviewMemory}>
-                    Review locally
-                  </button>
-                ) : null}
               </div>
               <p className="m-0 max-w-md text-sm leading-6 text-[var(--color-ink-soft)]" id="memory-help">
                 Use one fact per line. Keep passwords, payment details, and private keys out of memory import.

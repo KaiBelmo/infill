@@ -271,7 +271,7 @@ export const useCloudClientStore = create<CloudClientState & CloudClientActions>
 function deriveCloudFlags(cloudState: CloudState | null): Pick<CloudClientState, "cloudState" | "isSignedIn" | "cloudPlan" | "canUseCloud"> {
   const isSignedIn = Boolean(cloudState?.auth?.sessionToken);
   const cloudPlan = cloudState?.auth?.account.subscription.plan ?? "free";
-  const canUseCloud = cloudPlan === "pro" && (
+  const canUseCloud = isSignedIn && cloudPlan === "pro" && (
     cloudState?.auth?.account.subscription.status === "active" ||
     cloudState?.auth?.account.subscription.status === "on_trial"
   );

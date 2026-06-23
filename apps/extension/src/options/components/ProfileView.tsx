@@ -550,7 +550,7 @@ function ProfileViewComponent(props: ProfileViewProps) {
                 <input className="mt-1" type="checkbox" checked={localOllamaEnabled} onChange={(event) => changeLocalOllamaPreference(event.target.checked)} />
                 <span>{canUseCloud ? "Use local Ollama instead of cloud AI" : "Enable local Ollama on this device"}</span>
               </label>
-              {!canUseCloud ? <OptionsNotice>Use local Ollama without signing in. Cloud assist stays off until a qualifying plan is active.</OptionsNotice> : null}
+              {!canUseCloud && !localOllamaEnabled ? <OptionsNotice>Use local Ollama without signing in. Cloud assist stays off until a qualifying plan is active.</OptionsNotice> : null}
               {showOllamaSettings ? (
                 <div className="grid gap-3">
                   <label className="grid gap-2">
