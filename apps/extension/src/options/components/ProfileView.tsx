@@ -1,4 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import type { CloudState, DeviceInfo, ExtensionState } from "@/shared/types";
 import type { ProfileCategory, ProfileFact, Sensitivity } from "@infill/shared";
 import {
@@ -716,15 +717,20 @@ function ProfileViewComponent(props: ProfileViewProps) {
         </section>
       ) : null}
 
-      {dialog?.type === "edit_fact" ? <FactEditorModal fact={dialog.fact} onCancel={closeDialog} onSave={saveEditedFact} /> : null}
-      {dialog?.type === "confirm" ? (
-        <ConfirmModal
-          dialog={dialog}
-          cancelRef={cancelButtonRef}
-          onCancel={closeDialog}
-          onConfirm={() => void runConfirmed(dialog.action)}
-        />
-      ) : null}
+      {createPortal(
+        <>
+          {dialog?.type === "edit_fact" ? <FactEditorModal fact={dialog.fact} onCancel={closeDialog} onSave={saveEditedFact} /> : null}
+          {dialog?.type === "confirm" ? (
+            <ConfirmModal
+              dialog={dialog}
+              cancelRef={cancelButtonRef}
+              onCancel={closeDialog}
+              onConfirm={() => void runConfirmed(dialog.action)}
+            />
+          ) : null}
+        </>,
+        document.body
+      )}
     </section>
   );
 }
