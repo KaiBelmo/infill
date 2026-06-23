@@ -10,7 +10,10 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@infill/shared": ["../../packages/shared/src/index.ts"],
+      "@infill/form-brain": ["../../packages/form-brain/src/index.ts"],
+      "@infill/profile-vault": ["../../packages/profile-vault/src/index.ts"]
     },
     "types": ["vite/client", "@crxjs/vite-plugin/client", "chrome"],
     "allowImportingTsExtensions": true,

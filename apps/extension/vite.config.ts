@@ -12,6 +12,9 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "src"),
+        "@infill/shared": path.resolve(__dirname, "../../packages/shared/src/index.ts"),
+        "@infill/form-brain": path.resolve(__dirname, "../../packages/form-brain/src/index.ts"),
+        "@infill/profile-vault": path.resolve(__dirname, "../../packages/profile-vault/src/index.ts"),
       }
     },
     define: {
