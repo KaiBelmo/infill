@@ -194,11 +194,12 @@ onMessage("list-devices", async () => {
 onMessage("scan-tab", async ({ data }) => {
   const { tabId, tabUrl } = data as { tabId: number; tabUrl: string };
   await scanTab(tabId, tabUrl);
-  return useScanStore.getState().getScanState();
+  return useScanStore.getState().getScanState(tabId);
 });
 
-onMessage("get-scan-state", async () => {
-  return await getScanState();
+onMessage("get-scan-state", async ({ data }) => {
+  const { tabId } = (data ?? {}) as { tabId?: number };
+  return await getScanState(tabId);
 });
 
 onMessage("debug-profile-facts", () => {
@@ -312,8 +313,8 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return false;
   }
 
-  const scan = useScanStore.getState();
-  if (scan.tabId === tabId && scan.status === "Scanning") {
+  const scan = useScanStore.getState().getScanState(tabId);
+  if (scan.status === "Scanning") {
     sendResponse({ ok: false });
     return false;
   }
