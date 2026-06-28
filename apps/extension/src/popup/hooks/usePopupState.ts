@@ -68,6 +68,20 @@ export function usePopupState() {
     setLearnedNoticeUndo(undefined);
   }
 
+  function dismissLearnedNotice() {
+    setLearnedNoticeCount(0);
+    setLearnedNoticeUndo(undefined);
+  }
+
+  useEffect(() => {
+    if (learnedNoticeCount <= 0) return;
+    const timer = setTimeout(() => {
+      dismissLearnedNotice();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [learnedNoticeCount]);
+
+
   const allFields = useMemo(() => forms.flatMap((form) => form.fields), [forms]);
   const activeProfile = useMemo(
     () => extensionState.profiles.find((profile) => profile.id === extensionState.activeProfileId),
@@ -118,6 +132,7 @@ export function usePopupState() {
     pendingConflictCount, isSignedIn, canUseCloud,
     localOllamaEnabled, cloudAiEnabled, aiAssistConfigured,
     learnedNoticeCount, canUndoLearnedNotice: Boolean(learnedNoticeUndo), undoRecentLearnedFact,
+    dismissLearnedNotice,
     cloudBadge, aiBadge, billingLabel, usageText,
     changeActiveProfile: actions.changeActiveProfile, scanActiveTab: actions.scanActiveTab,
     openSettings: actions.openSettings, openBilling: actions.openBilling, startOAuth: actions.startOAuth,
