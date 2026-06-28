@@ -113,8 +113,8 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<StoredScan
   return _send("scan-tab", { tabId, tabUrl }, "background");
 }
 
-export async function getScanState(): Promise<StoredScanState> {
-  return _send("get-scan-state", null, "background");
+export async function getScanState(tabId?: number): Promise<StoredScanState> {
+  return _send("get-scan-state", { tabId }, "background");
 }
 
 export async function getPrivateSyncDebug(): Promise<unknown> {
