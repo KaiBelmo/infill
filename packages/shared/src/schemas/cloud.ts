@@ -253,6 +253,18 @@ export const ExtensionAuthExchangeRequestSchema = z.object({
   client: z.literal("browser-extension")
 });
 
+export const CloudFilterRequestSchema = z.object({
+  facts: z.array(ProfileFactSchema),
+  fieldLabels: z.array(z.string()),
+  requestedAt: z.string().datetime(),
+  locale: z.string().min(2).max(16).default("en")
+});
+
+export const CloudFilterResponseSchema = z.object({
+  keepIndexes: z.array(z.number()),
+  warnings: z.array(z.string()).default([])
+});
+
 export type CloudAssistRequest = z.infer<typeof CloudAssistRequestSchema>;
 export type CloudAssistResponse = z.infer<typeof CloudAssistResponseSchema>;
 export type CloudKeyMatchRequest = z.infer<typeof CloudKeyMatchRequestSchema>;
@@ -261,3 +273,5 @@ export type ParsedProfileField = z.infer<typeof ParsedProfileFieldSchema>;
 export type ParseProfileRequest = z.infer<typeof ParseProfileRequestSchema>;
 export type ParseProfileResponse = z.infer<typeof ParseProfileResponseSchema>;
 export type ExtensionAuthExchangeRequest = z.infer<typeof ExtensionAuthExchangeRequestSchema>;
+export type CloudFilterRequest = z.infer<typeof CloudFilterRequestSchema>;
+export type CloudFilterResponse = z.infer<typeof CloudFilterResponseSchema>;
