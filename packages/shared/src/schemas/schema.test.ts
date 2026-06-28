@@ -10,7 +10,9 @@ import {
   FieldMappingSchema,
   LocalProfileVaultSchema,
   ProfileBundleSchema,
-  ProfileFactSchema
+  ProfileFactSchema,
+  CloudFilterRequestSchema,
+  CloudFilterResponseSchema
 } from "../index";
 
 const timestamp = "2026-04-26T00:00:00.000Z";
@@ -245,5 +247,21 @@ describe("shared schemas", () => {
     expect(upload.envelopes[0]).toEqual(
       EncryptedCloudProfileEnvelopeSchema.parse(upload.envelopes[0])
     );
+  });
+
+  it("validates cloud filter requests and responses", () => {
+    const request = CloudFilterRequestSchema.parse({
+      facts: [],
+      fieldLabels: ["Email", "First Name"],
+      requestedAt: timestamp,
+      locale: "en"
+    });
+    expect(request.fieldLabels).toEqual(["Email", "First Name"]);
+
+    const response = CloudFilterResponseSchema.parse({
+      keepIndexes: [0, 2],
+      warnings: ["some warning"]
+    });
+    expect(response.keepIndexes).toEqual([0, 2]);
   });
 });
