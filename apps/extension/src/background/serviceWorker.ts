@@ -2,8 +2,7 @@ import "./handlers";
 import { handlePossibleAuthCallback } from "./auth";
 import { updateConflictBadge } from "./handlers";
 import { LOCAL_PROFILE_STATE_KEY } from "./profile-store";
-import { removeOverlays } from "./scan";
-import { useScanStore } from "./scan-store";
+import { removeOverlays, ensureScanStoreHydrated, clearScanState } from "./scan";
 
 chrome.runtime.onInstalled.addListener(() => undefined);
 
@@ -14,11 +13,10 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
   // Clear scan state when the scanned tab navigates or reloads
   if (changeInfo.status === "loading") {
-    const scan = useScanStore.getState();
-    if (scan.tabId === tabId && scan.status !== "Ready") {
-      removeOverlays(tabId).catch(() => undefined);
-      scan.clearScanState();
-    }
+    ensureScanStoreHydrated().then(async () => {
+      await removeOverlays(tabId).catch(() => undefined);
+      await clearScanState(tabId).catch(() => undefined);
+    }).catch(() => undefined);
   }
 });
 
