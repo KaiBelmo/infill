@@ -211,6 +211,14 @@ function Popup() {
               <span className="rounded-full bg-[var(--color-black)] px-2.5 py-1 text-[10px] font-[780] uppercase tracking-[0.12em] text-white">
                 {state.learnedNoticeCount} approved
               </span>
+              <button
+                className="flex h-5 w-5 items-center justify-center rounded-full text-[14px] leading-none text-[var(--color-ink-soft)] hover:bg-[rgba(0,0,0,0.06)] hover:text-[var(--color-ink)] transition"
+                type="button"
+                aria-label="Dismiss notice"
+                onClick={state.dismissLearnedNotice}
+              >
+                ×
+              </button>
             </div>
           </div>
         ) : null}
