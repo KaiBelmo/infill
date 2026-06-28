@@ -42,22 +42,20 @@ export const usePopupStore = create<PopupState & PopupActions>()((set, get) => (
 
   async syncScanState() {
     try {
-      const scanState = await bgGetScanState();
-      // If scan state belongs to a different tab, reset to Ready
       const tab = await getActiveTab();
-      const tabMatches = tab?.id != null && (scanState.tabId === tab.id || scanState.tabId === null);
-      if (tabMatches) {
-        set({
-          forms: scanState.forms ?? [],
-          mappings: scanState.mappings ?? [],
-          error: scanState.error ?? "",
-          status: scanState.status ?? "Ready",
-          scannedAt: scanState.scannedAt ?? "",
-          debug: scanState.debug,
-        });
-      } else {
+      if (!tab?.id) {
         set({ forms: [], mappings: [], error: "", status: "Ready", scannedAt: "", debug: undefined });
+        return;
       }
+      const scanState = await bgGetScanState(tab.id);
+      set({
+        forms: scanState.forms ?? [],
+        mappings: scanState.mappings ?? [],
+        error: scanState.error ?? "",
+        status: scanState.status ?? "Ready",
+        scannedAt: scanState.scannedAt ?? "",
+        debug: scanState.debug,
+      });
     } catch {
       // Background may not be ready yet
     }
@@ -129,37 +127,54 @@ if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
     const raw = changes[SCAN_STATE_KEY]?.newValue;
     if (raw == null) return;
     // Zustand persist wraps stored data as { state: {...}, version: N }
-    const incoming = (typeof raw === "object" && "state" in raw
-      ? (raw as { state: StoredScanState }).state
-      : raw) as StoredScanState;
+    const stateWrapper = (typeof raw === "object" && "state" in raw
+      ? (raw as { state: { tabs?: Record<number, StoredScanState> } }).state
+      : raw) as { tabs?: Record<number, StoredScanState> };
 
-    // If scan state was cleared (tab navigated), reset popup
-    if (incoming.status === "Ready" && (incoming.forms?.length ?? 0) === 0) {
-      usePopupStore.setState({ forms: [], mappings: [], error: "", status: "Ready", scannedAt: "", debug: undefined });
-      return;
-    }
+    if (!stateWrapper?.tabs) return;
 
-    const curStatus = usePopupStore.getState().status;
-    const curError = usePopupStore.getState().error;
-    const curFormsLen = usePopupStore.getState().forms.length;
-    const curMappingsLen = usePopupStore.getState().mappings.length;
-    const curDebugAt = usePopupStore.getState().debug?.generatedAt;
-    // Only sync if something actually changed to avoid render loops
-    if (
-      curStatus !== incoming.status ||
-      curError !== incoming.error ||
-      curFormsLen !== (incoming.forms?.length ?? 0) ||
-      curMappingsLen !== (incoming.mappings?.length ?? 0) ||
-      curDebugAt !== incoming.debug?.generatedAt
-    ) {
-      usePopupStore.setState({
-        forms: incoming.forms ?? [],
-        mappings: incoming.mappings ?? [],
-        error: incoming.error ?? "",
-        status: incoming.status ?? "Ready",
-        scannedAt: incoming.scannedAt ?? "",
-        debug: incoming.debug,
-      });
-    }
+    getActiveTab().then((tab) => {
+      if (!tab?.id) return;
+
+      const incoming = stateWrapper.tabs[tab.id] ?? {
+        tabId: tab.id,
+        url: "",
+        status: "Ready" as const,
+        forms: [],
+        mappings: [],
+        error: "",
+        scannedAt: "",
+        debug: undefined,
+      };
+
+      // If scan state was cleared (tab navigated), reset popup
+      if (incoming.status === "Ready" && (incoming.forms?.length ?? 0) === 0) {
+        usePopupStore.setState({ forms: [], mappings: [], error: "", status: "Ready", scannedAt: "", debug: undefined });
+        return;
+      }
+
+      const curStatus = usePopupStore.getState().status;
+      const curError = usePopupStore.getState().error;
+      const curFormsLen = usePopupStore.getState().forms.length;
+      const curMappingsLen = usePopupStore.getState().mappings.length;
+      const curDebugAt = usePopupStore.getState().debug?.generatedAt;
+      // Only sync if something actually changed to avoid render loops
+      if (
+        curStatus !== incoming.status ||
+        curError !== incoming.error ||
+        curFormsLen !== (incoming.forms?.length ?? 0) ||
+        curMappingsLen !== (incoming.mappings?.length ?? 0) ||
+        curDebugAt !== incoming.debug?.generatedAt
+      ) {
+        usePopupStore.setState({
+          forms: incoming.forms ?? [],
+          mappings: incoming.mappings ?? [],
+          error: incoming.error ?? "",
+          status: incoming.status ?? "Ready",
+          scannedAt: incoming.scannedAt ?? "",
+          debug: incoming.debug,
+        });
+      }
+    }).catch(() => undefined);
   });
 }
