@@ -107,7 +107,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
 
   if (isUnsupportedUrl(tabUrl)) {
     debugLog("[scanTab] Blocked â€” unsupported URL");
-    store.setScanState({
+    store.setScanState(tabId, {
       status: "Blocked",
       error: "This page cannot be scanned.",
       tabId,
@@ -120,7 +120,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
     return;
   }
 
-  store.setScanState({
+  store.setScanState(tabId, {
     status: "Scanning",
     error: "",
     tabId,
@@ -155,7 +155,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   debugLog("[scanTab] ensureContentScript result=", loaded);
   if (!loaded) {
     debugLog("[scanTab] ERROR â€” content script could not load");
-    store.setScanState({
+    store.setScanState(tabId, {
       status: "Error",
       error: "Could not load content script on this page.",
       tabId,
@@ -234,7 +234,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   }, "background/scanTab");
   if (allForms.length === 0 || allForms.every((form) => form.fields.length === 0)) {
     debugLog("[scanTab] Blocked â€” no visible/enabled fields");
-    store.setScanState({
+    store.setScanState(tabId, {
       status: "Blocked",
       error: "No visible or enabled form fields were detected on this page.",
       tabId,
@@ -385,7 +385,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
     llmKeyMatcher: llmKeyMatcherDebug,
     generatedAt: scannedAt
   });
-  store.setScanState({
+  store.setScanState(tabId, {
     status: finalStatus,
     forms: allForms,
     mappings: finalMappings,
@@ -397,7 +397,7 @@ export async function scanTab(tabId: number, tabUrl: string): Promise<void> {
   // Auto-fill non-sensitive fields and install inline overlays
   if (finalMappings.length > 0) {
     const fillDebug = await autoFillAndOverlay(tabId, allForms, finalMappings);
-    store.setScanState({
+    store.setScanState(tabId, {
       debug: buildScanDebug({
         forms: allForms,
         mappings: finalMappings,
@@ -569,18 +569,38 @@ async function ensureProfileStoreHydrated(): Promise<void> {
   await persistApi.rehydrate();
 }
 
+export async function ensureScanStoreHydrated(): Promise<void> {
+  const persistApi = (useScanStore as typeof useScanStore & {
+    persist?: {
+      hasHydrated?: () => boolean;
+      rehydrate?: () => Promise<void>;
+    };
+  }).persist;
+
+  if (!persistApi?.rehydrate || persistApi.hasHydrated?.()) {
+    return;
+  }
+
+  await persistApi.rehydrate();
+}
+
+
 export async function removeOverlays(tabId: number): Promise<void> {
   await ensureContentScript(tabId);
   await withTimeout(sendMessage("remove-overlays", null, { context: "content-script", tabId }));
 }
 
-export async function getScanState() {
-  return useScanStore.getState().getScanState();
+export async function getScanState(tabId?: number | null) {
+  await ensureScanStoreHydrated();
+  return useScanStore.getState().getScanState(tabId);
 }
 
-export async function clearScanState() {
-  useScanStore.getState().clearScanState();
+export async function clearScanState(tabId: number) {
+  await ensureScanStoreHydrated();
+  useScanStore.getState().clearScanState(tabId);
 }
+
+
 
 function buildScanDebug(input: {
   forms: ExtractedForm[];
