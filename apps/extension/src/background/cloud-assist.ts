@@ -5,6 +5,8 @@ import {
   CloudKeyMatchResponseSchema,
   ParseProfileRequestSchema,
   ParseProfileResponseSchema,
+  CloudFilterRequestSchema,
+  CloudFilterResponseSchema,
   type CloudAssistRequest,
   type CloudAssistResponse,
   type CloudKeyMatchRequest,
@@ -26,7 +28,44 @@ export async function runCloudAssist(request: CloudAssistRequest): Promise<Cloud
     throw new Error("No cloud session is connected.");
   }
 
-  const payload = CloudAssistRequestSchema.parse(request);
+  let prunedFacts = request.facts;
+
+  const estimatedPayloadSize = JSON.stringify(request).length;
+  const SKIP_FILTER_THRESHOLD = 40_000; // 40 KB
+
+  if (estimatedPayloadSize >= SKIP_FILTER_THRESHOLD && request.facts.length > 0) {
+    const allFields = request.forms.flatMap((form) => form.fields);
+    const fieldLabels = allFields
+      .map((field) => (field.labelText || field.ariaLabel || field.placeholder || field.name || field.fieldId || "").trim())
+      .filter((label) => label.length > 0);
+
+    if (fieldLabels.length > 0) {
+      try {
+        const filterPayload = CloudFilterRequestSchema.parse({
+          facts: request.facts,
+          fieldLabels,
+          requestedAt: new Date().toISOString(),
+          locale: request.locale || "en"
+        });
+
+        const filterResult = CloudFilterResponseSchema.parse(
+          await cloudApi.post(`${state.config.apiBaseUrl}/v1/assist/filter`, {
+            json: filterPayload,
+          }).json()
+        );
+
+        const keepSet = new Set(filterResult.keepIndexes);
+        prunedFacts = request.facts.filter((_, index) => keepSet.has(index));
+      } catch (err) {
+        console.warn("[cloud-assist] Failed to filter profile facts, falling back to full facts list", err);
+      }
+    }
+  }
+
+  const payload = CloudAssistRequestSchema.parse({
+    ...request,
+    facts: prunedFacts
+  });
   const assisted = CloudAssistResponseSchema.parse(
     await cloudApi.post(`${state.config.apiBaseUrl}/v1/assist/mappings`, {
       json: payload,
