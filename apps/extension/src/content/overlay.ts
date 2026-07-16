@@ -35,11 +35,48 @@ function createOverlayShadow(host: HTMLElement): ShadowRoot {
   return shadow;
 }
 
-const EDIT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>`;
-const CLEAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
-const LEARN_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 6v6l4 2"/></svg>`;
-const SAVED_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.8c0-.9.7-1.6 1.6-1.6h6.8c.9 0 1.6.7 1.6 1.6v15.4l-5-3.1-5 3.1V4.8Z"/></svg>`;
+type IconName = "edit" | "clear" | "learn" | "saved";
 
+function createIcon(name: IconName): SVGSVGElement {
+  const svg = createSvgElement("svg", {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": name === "edit" ? "1.9" : name === "saved" ? "2.2" : "2",
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+  });
+
+  if (name === "edit") {
+    svg.append(
+      createSvgElement("path", { d: "M5 12h14" }),
+      createSvgElement("path", { d: "m13 6 6 6-6 6" })
+    );
+  } else if (name === "clear") {
+    svg.append(
+      createSvgElement("line", { x1: "18", y1: "6", x2: "6", y2: "18" }),
+      createSvgElement("line", { x1: "6", y1: "6", x2: "18", y2: "18" })
+    );
+  } else if (name === "learn") {
+    svg.append(
+      createSvgElement("path", { d: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" }),
+      createSvgElement("path", { d: "M12 6v6l4 2" })
+    );
+  } else {
+    svg.setAttribute("aria-hidden", "true");
+    svg.append(createSvgElement("path", { d: "M7 4.8c0-.9.7-1.6 1.6-1.6h6.8c.9 0 1.6.7 1.6 1.6v15.4l-5-3.1-5 3.1V4.8Z" }));
+  }
+
+  return svg;
+}
+
+function createSvgElement<K extends keyof SVGElementTagNameMap>(tagName: K, attributes: Record<string, string>): SVGElementTagNameMap[K] {
+  const element = document.createElementNS("http://www.w3.org/2000/svg", tagName);
+  for (const [attribute, value] of Object.entries(attributes)) {
+    element.setAttribute(attribute, value);
+  }
+  return element;
+}
 function getSourceLabel(mapping: FieldMapping): string {
   switch (mapping.valueSource) {
     case "profile_fact": return "From profile";
@@ -112,7 +149,7 @@ function installFilledOverlay(mapping: FieldMapping, field: ExtractedField, elem
 
   const icon = document.createElement("div");
   icon.className = "pf-icon";
-  icon.innerHTML = EDIT_ICON;
+  icon.appendChild(createIcon("edit"));
   icon.setAttribute("data-field-id", mapping.fieldId);
   icon.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -229,13 +266,13 @@ function toggleDropdown(fieldId: string): void {
   dropdown.className = "pf-dropdown";
   dropdown.setAttribute("data-dropdown-for", fieldId);
 
-  const editItem = createDropdownItem("Edit value", EDIT_ICON, () => {
+  const editItem = createDropdownItem("Edit value", "edit", () => {
     startInlineEdit(fieldId);
     closeDropdown(fieldId);
   });
   dropdown.appendChild(editItem);
 
-  const clearItem = createDropdownItem("Clear field", CLEAR_ICON, () => {
+  const clearItem = createDropdownItem("Clear field", "clear", () => {
     clearFieldValue(fieldId);
     closeDropdown(fieldId);
   });
@@ -243,7 +280,7 @@ function toggleDropdown(fieldId: string): void {
 
   dropdown.appendChild(createSeparator());
 
-  const learnItem = createDropdownItem("Always use this value", LEARN_ICON, () => {
+  const learnItem = createDropdownItem("Always use this value", "learn", () => {
     learnFieldValue(fieldId);
     closeDropdown(fieldId);
   });
@@ -265,10 +302,12 @@ function closeDropdown(fieldId: string): void {
   if (activeDropdown === fieldId) activeDropdown = null;
 }
 
-function createDropdownItem(label: string, iconSvg: string, onClick: () => void): HTMLElement {
+function createDropdownItem(label: string, iconName: IconName, onClick: () => void): HTMLElement {
   const item = document.createElement("div");
   item.className = "pf-dropdown-item";
-  item.innerHTML = `${iconSvg}<span>${label}</span>`;
+  const labelElement = document.createElement("span");
+  labelElement.textContent = label;
+  item.append(createIcon(iconName), labelElement);
   item.addEventListener("click", (e) => {
     e.stopPropagation();
     onClick();
@@ -427,7 +466,7 @@ async function learnMissingFieldValue(fieldId: string): Promise<void> {
         (badge as HTMLElement).style.color = "#0b0b0d";
         (badge as HTMLElement).title = "Needs review";
       } else {
-        badge.innerHTML = SAVED_ICON;
+        badge.replaceChildren(createIcon("saved"));
         badge.setAttribute("data-state", "saved");
         (badge as HTMLElement).style.background = "#0b0b0d";
         (badge as HTMLElement).style.borderColor = "#0b0b0d";

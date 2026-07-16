@@ -273,12 +273,44 @@ function createFillCursor(): HTMLElement {
     "transition:transform 520ms cubic-bezier(.22,1,.36,1), opacity 240ms ease",
     "filter:drop-shadow(0 10px 18px rgba(10,22,20,.22))"
   ].join(";");
-  cursor.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 3.5 19.5 12 13 13.8 9.7 20.1 4 3.5Z" fill="#F7F2E8" stroke="#123A35" stroke-width="1.7" stroke-linejoin="round"/><path d="m13 13.8 5.2 5.2" stroke="#123A35" stroke-width="1.7" stroke-linecap="round"/></svg>`;
+  cursor.appendChild(createFillCursorIcon());
   document.documentElement.append(cursor);
 
   return cursor;
 }
 
+function createFillCursorIcon(): SVGSVGElement {
+  const svg = createSvgElement("svg", {
+    viewBox: "0 0 24 24",
+    width: "24",
+    height: "24",
+    fill: "none",
+  });
+  svg.append(
+    createSvgElement("path", {
+      d: "M4 3.5 19.5 12 13 13.8 9.7 20.1 4 3.5Z",
+      fill: "#F7F2E8",
+      stroke: "#123A35",
+      "stroke-width": "1.7",
+      "stroke-linejoin": "round",
+    }),
+    createSvgElement("path", {
+      d: "m13 13.8 5.2 5.2",
+      stroke: "#123A35",
+      "stroke-width": "1.7",
+      "stroke-linecap": "round",
+    })
+  );
+  return svg;
+}
+
+function createSvgElement<K extends keyof SVGElementTagNameMap>(tagName: K, attributes: Record<string, string>): SVGElementTagNameMap[K] {
+  const element = document.createElementNS("http://www.w3.org/2000/svg", tagName);
+  for (const [name, value] of Object.entries(attributes)) {
+    element.setAttribute(name, value);
+  }
+  return element;
+}
 async function moveCursorToElement(cursor: HTMLElement, element: Element): Promise<void> {
   const rect = element.getBoundingClientRect();
   const x = Math.max(12, rect.left + Math.min(rect.width * 0.18, 36));
