@@ -21,22 +21,22 @@
     "@infill/snaplog": "npm:@kaibelmo/snaplog@^0.1.5",
     "@vitejs/plugin-react": "^5.1.2",
     "ky": "^2.0.2",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "vite": "^7.3.0",
     "webext-bridge": "^6.0.1",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@crxjs/vite-plugin": "^2.4.0",
-    "@tailwindcss/vite": "^4.2.4",
-    "@types/chrome": "^0.1.33",
+    "@crxjs/vite-plugin": "^2.7.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/chrome": "^0.2.2",
     "@types/node": "^24.10.2",
-    "@types/react": "^19.2.7",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "tailwindcss": "^4.2.4",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite-plugin-zip-pack": "^1.2.4",
-    "vitest": "^4.0.14"
+    "vitest": "^4.1.10"
   }
 }
