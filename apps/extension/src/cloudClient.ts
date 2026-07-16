@@ -174,14 +174,7 @@ export async function startOAuthFlow(): Promise<void> {
   const tab = await chrome.tabs.create({ url: authUrl.toString(), active: true });
   if (tab.id !== undefined) {
     await chrome.storage.session.set({ infillAuthTabId: tab.id });
-    try {
-      const result = chrome.runtime.sendMessage({ type: "infill-auth-watch", tabId: tab.id });
-      if (result && typeof result.catch === "function") {
-        result.catch(() => undefined);
-      }
-    } catch {
-      // The background also scans open tabs on startup/update, so this is only a wake-up hint.
-    }
+    chrome.runtime.sendMessage({ type: "infill-auth-watch", tabId: tab.id }).catch(() => undefined);
   }
 }
 
