@@ -19,7 +19,7 @@
     "@infill/profile-vault": "workspace:*",
     "@infill/shared": "workspace:*",
     "@infill/snaplog": "npm:@kaibelmo/snaplog@^0.1.5",
-    "@vitejs/plugin-react": "^5.1.2",
+    "@vitejs/plugin-react": "^6.0.3",
     "ky": "^2.0.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
