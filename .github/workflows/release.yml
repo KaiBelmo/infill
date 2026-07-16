@@ -25,13 +25,13 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Enable Corepack
         run: corepack enable
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -178,7 +178,7 @@ jobs:
 
       - name: Upload workflow artifacts
         if: github.event_name == 'workflow_dispatch' && inputs.create_release != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: infill-release-v${{ steps.version.outputs.version }}
           path: |
