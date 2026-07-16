@@ -35,7 +35,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "tailwindcss": "^4.2.4",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vite-plugin-zip-pack": "^1.2.4",
     "vitest": "^4.0.14"
   }
