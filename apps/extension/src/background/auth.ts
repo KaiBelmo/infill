@@ -1,6 +1,8 @@
 import { normalizeAuth, persistAuth, getCloudState } from "./cloud";
 import { prepareProfileSyncAfterAuth } from "./profile-sync";
+import type { CloudState } from "@/shared/types";
 
+const LOCAL_CLOUD_STATE_KEY = "infillCloudState";
 const AUTH_STATE_KEY = "infillAuthState";
 const AUTH_CODE_VERIFIER_KEY = "infillAuthCodeVerifier";
 const AUTH_ERROR_KEY = "infillAuthError";
@@ -15,7 +17,7 @@ export async function startAuthFlow(): Promise<void> {
     [AUTH_CODE_VERIFIER_KEY]: codeVerifier,
   });
 
-  const cloudState = getCloudState();
+  const cloudState = await getCloudStateWithPersistedConfig();
   const webBaseUrl = cloudState.config.webBaseUrl;
 
   if (!webBaseUrl) {
@@ -39,7 +41,7 @@ export async function startAuthFlow(): Promise<void> {
 }
 
 export async function handlePossibleAuthCallback(tabId: number, rawUrl: string): Promise<void> {
-  const cloudState = getCloudState();
+  const cloudState = await getCloudStateWithPersistedConfig();
   const webBaseUrl = cloudState.config.webBaseUrl;
   if (!webBaseUrl) return;
 
@@ -131,7 +133,7 @@ export async function handlePossibleAuthCallback(tabId: number, rawUrl: string):
 }
 
 async function openOptionsProfile(tabId: number): Promise<void> {
-  const url = chrome.runtime.getURL("src/options/index.html#/profile");
+  const url = chrome.runtime.getURL("src/options/index.html#/sync");
   if (tabId === chrome.tabs.TAB_ID_NONE) {
     await chrome.tabs.create({ url, active: true });
     return;
@@ -140,6 +142,28 @@ async function openOptionsProfile(tabId: number): Promise<void> {
   await chrome.tabs.update(tabId, { url });
 }
 
+async function getCloudStateWithPersistedConfig(): Promise<CloudState> {
+  const cloudState = getCloudState();
+  if (cloudState.config.webBaseUrl && cloudState.config.apiBaseUrl) {
+    return cloudState;
+  }
+
+  const local = await chrome.storage.local.get(LOCAL_CLOUD_STATE_KEY);
+  const persisted = local[LOCAL_CLOUD_STATE_KEY];
+  const persistedState = persisted && typeof persisted === "object" && "state" in persisted
+    ? (persisted as { state?: Partial<CloudState> }).state
+    : undefined;
+
+  return {
+    ...cloudState,
+    config: {
+      ...cloudState.config,
+      ...persistedState?.config,
+      webBaseUrl: (cloudState.config.webBaseUrl || persistedState?.config?.webBaseUrl || __VITE_WEB_BASE_URL__).trim().replace(/\/$/, ""),
+      apiBaseUrl: (cloudState.config.apiBaseUrl || persistedState?.config?.apiBaseUrl || __VITE_API_BASE_URL__).trim().replace(/\/$/, "")
+    }
+  };
+}
 function generateCodeVerifier(): string {
   const randomBytes = new Uint8Array(32);
   crypto.getRandomValues(randomBytes);
