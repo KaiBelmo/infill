@@ -9,7 +9,9 @@
     "dev": "corepack pnpm --dir apps/extension run dev",
     "dev:extension": "corepack pnpm --dir apps/extension run dev",
     "test": "corepack pnpm -r test",
-    "typecheck": "corepack pnpm --filter @infill/shared build && corepack pnpm --filter @infill/form-brain build && corepack pnpm --filter @infill/profile-vault build && corepack pnpm --filter @infill/extension typecheck"
+    "typecheck": "corepack pnpm --filter @infill/shared build && corepack pnpm --filter @infill/form-brain build && corepack pnpm --filter @infill/profile-vault build && corepack pnpm --filter @infill/extension typecheck",
+    "build:chromium": "corepack pnpm --filter @infill/shared build && corepack pnpm --filter @infill/form-brain build && corepack pnpm --filter @infill/profile-vault build && corepack pnpm --filter @infill/extension build:chromium",
+    "build:mozilla": "corepack pnpm --filter @infill/shared build && corepack pnpm --filter @infill/form-brain build && corepack pnpm --filter @infill/profile-vault build && corepack pnpm --filter @infill/extension build:mozilla"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"],
