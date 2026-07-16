@@ -41,6 +41,7 @@ async function pollAuthCallbackTab(tabId: number): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
+
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendResponse) => {
   if (message?.type === "infill-auth-watch") {
     if (typeof message.tabId === "number") {
