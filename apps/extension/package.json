@@ -10,7 +10,9 @@
     "dev:test-forms": "vite --config test-forms/vite.config.ts",
     "test": "vitest run --passWithNoTests",
     "test:test-forms": "vitest run --config test-forms/vitest.config.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:chromium": "vite build && python scripts/package-chromium.py",
+    "build:mozilla": "vite build && python scripts/package-firefox.py"
   },
   "dependencies": {
     "@infill/form-brain": "workspace:*",
