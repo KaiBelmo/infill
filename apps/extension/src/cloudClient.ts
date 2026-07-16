@@ -20,6 +20,50 @@ export function initBridge(fn: BridgeSendMessage): void {
 
 export type { LearnedFactConflict, LearnedFactUndo, DeviceInfo };
 
+const LOCAL_CLOUD_STATE_KEY = "infillCloudState";
+const AUTH_STATE_KEY = "infillAuthState";
+const AUTH_CODE_VERIFIER_KEY = "infillAuthCodeVerifier";
+
+async function readCloudConfigFromStorage(): Promise<{ webBaseUrl: string; apiBaseUrl: string }> {
+  const local = await chrome.storage.local.get(LOCAL_CLOUD_STATE_KEY);
+  const persisted = local[LOCAL_CLOUD_STATE_KEY];
+  const persistedState = persisted && typeof persisted === "object" && "state" in persisted
+    ? (persisted as { state?: Partial<CloudState> }).state
+    : undefined;
+
+  return {
+    webBaseUrl: trimBaseUrl(persistedState?.config?.webBaseUrl || __VITE_WEB_BASE_URL__),
+    apiBaseUrl: trimBaseUrl(persistedState?.config?.apiBaseUrl || __VITE_API_BASE_URL__)
+  };
+}
+
+function trimBaseUrl(value: string): string {
+  return value.trim().replace(/\/$/, "");
+}
+
+async function createCodeChallenge(verifier: string): Promise<string> {
+  const data = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+function generateCodeVerifier(): string {
+  const randomBytes = new Uint8Array(32);
+  crypto.getRandomValues(randomBytes);
+  return base64UrlEncode(randomBytes);
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
 export async function getCloudState(): Promise<CloudState> {
   return _send("get-cloud-state", null, "background");
 }
@@ -106,7 +150,39 @@ export async function listDevices(): Promise<DeviceInfo[]> {
 }
 
 export async function startOAuthFlow(): Promise<void> {
-  await _send("auth-start", null, "background");
+  const state = crypto.randomUUID();
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await createCodeChallenge(codeVerifier);
+  await chrome.storage.session.set({
+    [AUTH_STATE_KEY]: state,
+    [AUTH_CODE_VERIFIER_KEY]: codeVerifier
+  });
+
+  const { webBaseUrl } = await readCloudConfigFromStorage();
+  if (!webBaseUrl) {
+    throw new Error("Set the cloud web base URL in settings before signing in.");
+  }
+
+  const extensionCallbackUrl = `${webBaseUrl}${__VITE_EXTENSION_REDIRECT_PATH__}`;
+  const authUrl = new URL("/account", webBaseUrl);
+  authUrl.searchParams.set("returnTo", extensionCallbackUrl);
+  authUrl.searchParams.set("state", state);
+  authUrl.searchParams.set("client", "browser-extension");
+  authUrl.searchParams.set("code_challenge", codeChallenge);
+  authUrl.searchParams.set("code_challenge_method", "S256");
+
+  const tab = await chrome.tabs.create({ url: authUrl.toString(), active: true });
+  if (tab.id !== undefined) {
+    await chrome.storage.session.set({ infillAuthTabId: tab.id });
+    try {
+      const result = chrome.runtime.sendMessage({ type: "infill-auth-watch", tabId: tab.id });
+      if (result && typeof result.catch === "function") {
+        result.catch(() => undefined);
+      }
+    } catch {
+      // The background also scans open tabs on startup/update, so this is only a wake-up hint.
+    }
+  }
 }
 
 export async function scanTab(tabId: number, tabUrl: string): Promise<StoredScanState> {
