@@ -14,6 +14,8 @@ declare global {
 if (!globalThis.__FORM_MATE_LOADED__) {
   globalThis.__FORM_MATE_LOADED__ = true;
 
+  notifyExtensionAuthRedirect();
+
   let latestForms: ExtractedForm[] = [];
   let latestFormSignature = "";
   let formChangeObserver: MutationObserver | undefined;
@@ -59,6 +61,25 @@ if (!globalThis.__FORM_MATE_LOADED__) {
     return { ok: true };
   });
 
+
+  function notifyExtensionAuthRedirect(): void {
+    if (window.location.pathname !== __VITE_EXTENSION_REDIRECT_PATH__) return;
+    const url = window.location.href;
+    const params = new URL(url).searchParams;
+    if (!params.has("code") && !params.has("error")) return;
+
+    debugLog("[contentScript] extension auth redirect detected", {
+      origin: window.location.origin,
+      pathname: window.location.pathname,
+      hasCode: params.has("code"),
+      hasError: params.has("error"),
+      hasState: params.has("state")
+    });
+
+    chrome.runtime.sendMessage({ type: "infill-auth-callback", url }).catch((error) => {
+      debugLog("[contentScript] auth callback notify failed", error);
+    });
+  }
   function startFormChangeWatch(): void {
     stopFormChangeWatch();
     formChangeObserver = new MutationObserver(() => {
