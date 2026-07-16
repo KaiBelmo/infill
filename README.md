@@ -50,6 +50,15 @@ Create a production build:
 corepack pnpm build
 ```
 
+Create browser-specific release packages:
+
+```powershell
+corepack pnpm build:mozilla
+corepack pnpm build:chromium
+```
+
+The Mozilla package is written to `apps/extension/infill-amo-<version>-firefox.zip`. The Chromium package is written to `apps/extension/infill-chromium-<version>.zip`.
+
 Run tests:
 
 ```powershell

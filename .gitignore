@@ -7,3 +7,6 @@ dist/
 .env.*
 !.env.example
 !.env.production.example
+
+# Extension release packages
+apps/extension/*.zip
