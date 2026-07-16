@@ -1,0 +1,207 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: "Create a GitHub Release for the selected ref"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build release artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Read extension version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./apps/extension/package.json').version")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag matches extension version
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="v${{ steps.version.outputs.version }}"
+          actual="${GITHUB_REF_NAME}"
+          if [ "${actual}" != "${expected}" ]; then
+            echo "Release tag ${actual} does not match apps/extension/package.json version ${{ steps.version.outputs.version }}. Expected ${expected}."
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: corepack pnpm typecheck
+
+      - name: Test
+        run: corepack pnpm test
+
+      - name: Build Chromium extension
+        run: corepack pnpm build:chromium
+
+      - name: Package Chromium artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          dist="apps/extension/dist"
+          artifact="infill-chromium-v${version}.zip"
+          test -f "${dist}/manifest.json"
+          rm -f "${artifact}"
+          python - <<'PY'
+          import pathlib
+          import zipfile
+
+          dist = pathlib.Path("apps/extension/dist")
+          artifact = pathlib.Path(f"infill-chromium-v${{ steps.version.outputs.version }}.zip")
+          excluded_suffixes = {".map"}
+          with zipfile.ZipFile(artifact, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+              for path in sorted(dist.rglob("*")):
+                  if path.is_file() and path.suffix not in excluded_suffixes:
+                      archive.write(path, path.relative_to(dist).as_posix())
+          with zipfile.ZipFile(artifact) as archive:
+              names = archive.namelist()
+              if "manifest.json" not in names:
+                  raise SystemExit("manifest.json is not at the root of the Chromium ZIP")
+              forbidden = (".git/", "node_modules/", ".env")
+              bad = [name for name in names if name.startswith(forbidden) or "/node_modules/" in name or "/.git/" in name or "/.env" in name]
+              if bad:
+                  raise SystemExit(f"Chromium ZIP contains forbidden entries: {bad[:5]}")
+              print("\n".join(names))
+          PY
+
+      - name: Build Mozilla extension
+        run: corepack pnpm build:mozilla
+
+      - name: Lint Mozilla extension
+        run: corepack pnpm dlx web-ext@8.10.0 lint --source-dir apps/extension/dist
+
+      - name: Package Firefox artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          dist="apps/extension/dist"
+          artifact="infill-firefox-unsigned-v${version}.zip"
+          test -f "${dist}/manifest.json"
+          rm -f "${artifact}"
+          python - <<'PY'
+          import pathlib
+          import zipfile
+
+          dist = pathlib.Path("apps/extension/dist")
+          artifact = pathlib.Path(f"infill-firefox-unsigned-v${{ steps.version.outputs.version }}.zip")
+          excluded_suffixes = {".map"}
+          with zipfile.ZipFile(artifact, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+              for path in sorted(dist.rglob("*")):
+                  if path.is_file() and path.suffix not in excluded_suffixes:
+                      archive.write(path, path.relative_to(dist).as_posix())
+          with zipfile.ZipFile(artifact) as archive:
+              names = archive.namelist()
+              if "manifest.json" not in names:
+                  raise SystemExit("manifest.json is not at the root of the Firefox ZIP")
+              forbidden = (".git/", "node_modules/", ".env")
+              bad = [name for name in names if name.startswith(forbidden) or "/node_modules/" in name or "/.git/" in name or "/.env" in name]
+              if bad:
+                  raise SystemExit(f"Firefox ZIP contains forbidden entries: {bad[:5]}")
+              print("\n".join(names))
+          PY
+
+      - name: Package source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          artifact="infill-source-v${version}.zip"
+          rm -f "${artifact}"
+          python - <<'PY'
+          import pathlib
+          import zipfile
+
+          root = pathlib.Path(".")
+          artifact = pathlib.Path(f"infill-source-v${{ steps.version.outputs.version }}.zip")
+          excluded_dirs = {".git", "node_modules", "dist", ".turbo", ".vite"}
+          excluded_suffixes = {".zip", ".tsbuildinfo"}
+          excluded_names = {".env"}
+          with zipfile.ZipFile(artifact, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+              for path in sorted(root.rglob("*")):
+                  if not path.is_file() or path == artifact:
+                      continue
+                  parts = set(path.parts)
+                  if parts & excluded_dirs:
+                      continue
+                  if path.suffix in excluded_suffixes or path.name in excluded_names or path.name.startswith(".env."):
+                      continue
+                  archive.write(path, path.as_posix())
+          with zipfile.ZipFile(artifact) as archive:
+              names = archive.namelist()
+              required = {"package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "apps/extension/package.json", "docs/releases.md"}
+              missing = sorted(required - set(names))
+              if missing:
+                  raise SystemExit(f"Source ZIP is missing required files: {missing}")
+              forbidden = (".git/", "node_modules/", "apps/extension/dist/", ".env")
+              bad = [name for name in names if name.startswith(forbidden) or "/node_modules/" in name or "/.git/" in name or "/dist/" in name or "/.env" in name]
+              if bad:
+                  raise SystemExit(f"Source ZIP contains forbidden entries: {bad[:5]}")
+              print("\n".join(names))
+          PY
+
+      - name: Upload workflow artifacts
+        if: github.event_name == 'workflow_dispatch' && inputs.create_release != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: infill-release-v${{ steps.version.outputs.version }}
+          path: |
+            infill-chromium-v${{ steps.version.outputs.version }}.zip
+            infill-firefox-unsigned-v${{ steps.version.outputs.version }}.zip
+            infill-source-v${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' || inputs.create_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists. Refusing to overwrite it."
+            exit 1
+          fi
+          gh release create "${tag}" \
+            --verify-tag \
+            --generate-notes \
+            "infill-chromium-v${{ steps.version.outputs.version }}.zip" \
+            "infill-firefox-unsigned-v${{ steps.version.outputs.version }}.zip" \
+            "infill-source-v${{ steps.version.outputs.version }}.zip"
