@@ -1,31 +1,13 @@
 version: 2
 updates:
-  - package-ecosystem: npm
+  - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 1
-    commit-message:
-      prefix: "chore(deps)"
-    groups:
-      npm-dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - major
-          - minor
-          - patch
+      interval: "weekly"
+    open-pull-requests-limit: 0
 
-  - package-ecosystem: github-actions
+  - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "chore(actions)"
-    groups:
-      github-actions:
-        patterns:
-          - "*"
+      interval: "weekly"
+    open-pull-requests-limit: 0
