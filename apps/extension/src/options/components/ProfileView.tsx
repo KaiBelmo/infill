@@ -79,9 +79,9 @@ const categories: ProfileCategory[] = [
 ];
 const sensitivities: Sensitivity[] = ["public", "normal", "sensitive", "restricted", "secret"];
 
-const quietCardClass = "rounded-[16px] border border-[var(--color-line)] bg-white px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]";
+const quietCardClass = "rounded-[2rem] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-4 py-4 shadow-[0_8px_24px_rgba(0,0,0,0.035)]";
 const dividerClass = "border-t border-[var(--color-line)] pt-3";
-const dangerButtonClass = "inline-flex h-10 items-center justify-center rounded-xl border border-[rgba(215,0,21,0.22)] bg-white px-4 text-sm font-semibold text-[var(--color-danger)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45";
+const dangerButtonClass = "inline-flex h-10 items-center justify-center rounded-full border border-[rgba(215,0,21,0.22)] bg-white px-4 text-sm font-[760] text-[var(--color-danger)] transition hover:-translate-y-0.5 hover:bg-[rgba(215,0,21,0.06)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(215,0,21,0.12)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0";
 
 function ProfileViewComponent(props: ProfileViewProps) {
   const {
@@ -368,7 +368,7 @@ function ProfileViewComponent(props: ProfileViewProps) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="grid gap-2">
             <span className={sectionHeadingLabelClass}>Gemini</span>
-            <h2 className="m-0 text-[28px] font-[760] tracking-[-0.035em] text-[var(--color-ink)] sm:text-[32px]" id="profile-title">
+            <h2 className="m-0 [font-family:var(--font-display)] text-[28px] font-[800] tracking-[-0.04em] text-[var(--color-ink)] sm:text-[32px]" id="profile-title">
               {sectionTitle}
             </h2>
             <p className="m-0 max-w-2xl text-sm leading-6 text-[var(--color-ink-soft)]">
@@ -399,7 +399,7 @@ function ProfileViewComponent(props: ProfileViewProps) {
                   return (
                     <button
                       aria-checked={selected}
-                      className={`flex items-center justify-between rounded-xl border px-3.5 py-2.5 text-left text-sm transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(17,17,19,0.08)] ${selected ? "border-[rgba(17,17,19,0.2)] bg-[var(--color-black-soft)] text-white" : "border-[var(--color-line)] bg-[var(--color-mist)] text-[var(--color-ink)] hover:bg-white"}`}
+                      className={`flex items-center justify-between rounded-full border px-3.5 py-2.5 text-left text-sm transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgba(17,17,19,0.08)] ${selected ? "border-black bg-black text-white" : "border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 text-[var(--color-ink)] hover:bg-white"}`}
                       key={profile.id}
                       role="radio"
                       type="button"
@@ -481,7 +481,7 @@ function ProfileViewComponent(props: ProfileViewProps) {
           ) : (
             <div className="overflow-x-auto rounded-[14px] border border-[var(--color-line)] bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
               <table className="min-w-[820px] w-full border-collapse bg-white text-left text-sm">
-                <thead className="sticky top-0 z-[1] bg-[var(--color-mist)] text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
+                <thead className="sticky top-0 z-[1] bg-white/68 backdrop-blur-xl backdrop-saturate-150 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
                   <tr>
                     <th className="px-3.5 py-2.5">Name</th>
                     <th className="px-3.5 py-2.5">Value</th>
@@ -656,7 +656,7 @@ function ProfileViewComponent(props: ProfileViewProps) {
                       {syncPreview.conflicts.length > 0 ? (
                         <div className="grid gap-3">
                           {syncPreview.conflicts.map((conflict) => (
-                            <article className="grid gap-3 rounded-[16px] border border-[var(--color-line)] bg-[var(--color-mist)] px-4 py-3" key={conflict.id}>
+                            <article className="grid gap-3 rounded-[24px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-4 py-3" key={conflict.id}>
                               <strong className="text-sm text-[var(--color-ink)]">{conflict.factLabel}</strong>
                               <span className="text-xs leading-5 text-[var(--color-ink-soft)]">{conflict.profileName} / {conflict.factKey}</span>
                               <p className="m-0 text-sm leading-6 text-[var(--color-ink-soft)]">Local: {String(conflict.localFact.value)} / Cloud: {String(conflict.cloudFact.value)}</p>
@@ -686,7 +686,7 @@ function ProfileViewComponent(props: ProfileViewProps) {
                   {devices.length > 0 ? (
                     <ul className="m-0 grid max-h-60 gap-2 overflow-y-auto p-0">
                       {devices.map((device) => (
-                        <li className="list-none rounded-xl bg-[var(--color-mist)] px-3 py-2 text-sm" key={device.id}>
+                        <li className="list-none rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-3 py-2 text-sm" key={device.id}>
                           {device.name}
                           <span className="block pt-1 text-xs text-[var(--color-ink-soft)]">{device.browser ?? device.platform ?? ""}</span>
                           <span className="block pt-1 text-xs text-[var(--color-ink-soft)]">Last seen {new Date(device.lastSeenAt).toLocaleDateString()}</span>
@@ -738,11 +738,11 @@ function ProfileViewComponent(props: ProfileViewProps) {
 export const ProfileView = memo(ProfileViewComponent);
 
 function SummaryStat({ label, value }: { label: string; value: string | number }) {
-  return <div className="rounded-[14px] border border-[var(--color-line)] bg-[var(--color-mist)] px-3.5 py-2.5"><span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">{label}</span><strong className="mt-1 block text-base text-[var(--color-ink)]">{value}</strong></div>;
+  return <div className="rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-3.5 py-2.5"><span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">{label}</span><strong className="mt-1 block text-base text-[var(--color-ink)]">{value}</strong></div>;
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
-  return <div className="rounded-[16px] border border-dashed border-[var(--color-line)] bg-[var(--color-mist)] px-4 py-8"><strong className="text-sm text-[var(--color-ink)]">{title}</strong><p className="m-0 mt-2 text-sm leading-6 text-[var(--color-ink-soft)]">{body}</p></div>;
+  return <div className="rounded-[24px] border border-dashed border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-4 py-8"><strong className="text-sm text-[var(--color-ink)]">{title}</strong><p className="m-0 mt-2 text-sm leading-6 text-[var(--color-ink-soft)]">{body}</p></div>;
 }
 
 const FactRow = memo(function FactRow(props: {
@@ -778,21 +778,21 @@ const FactRow = memo(function FactRow(props: {
       <tr className="border-t border-[var(--color-line)] align-top">
         <td className="px-3.5 py-2.5 font-semibold text-[var(--color-ink)]">{fact.label}</td>
         <td className="max-w-[440px] px-3.5 py-2.5 text-[var(--color-ink-soft)]"><span className="line-clamp-2 break-words leading-5">{String(fact.value)}</span></td>
-        <td className="px-3.5 py-2.5 text-[var(--color-ink-soft)]"><span className="inline-flex rounded-full bg-[var(--color-mist)] px-2.5 py-1 text-xs font-medium text-[var(--color-ink-soft)]">{titleCase(fact.category)}</span></td>
+        <td className="px-3.5 py-2.5 text-[var(--color-ink-soft)]"><span className="inline-flex rounded-full bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-2.5 py-1 text-xs font-medium text-[var(--color-ink-soft)]">{titleCase(fact.category)}</span></td>
         <td className="px-3.5 py-2.5 text-[var(--color-ink-soft)]"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${sensitivityChipClass(fact.sensitivity)}`}>{titleCase(fact.sensitivity)}</span></td>
         <td className="relative px-3.5 py-2.5 text-right">
           <button className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-line)] bg-white text-base font-bold leading-none shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]" type="button" aria-haspopup="menu" aria-expanded={menuOpen} aria-label={`Actions for ${fact.label}`} onClick={() => onToggleMenu(fact.id)}>...</button>
           {menuOpen ? (
-            <div ref={menuRef} className="absolute right-3 z-10 mt-1.5 grid min-w-36 gap-1 rounded-xl border border-[var(--color-line)] bg-white p-1.5 text-left shadow-[0_14px_34px_rgba(15,23,42,0.13)]" role="menu" onKeyDown={onMenuKeyDown}>
-              <button className="rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--color-mist)]" role="menuitem" type="button" onClick={(event) => onEdit(fact, event.currentTarget)}>Edit</button>
-              <button className="rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--color-mist)]" role="menuitem" type="button" onClick={() => onToggleExpanded(fact.id)}>{expanded ? "Hide key" : "View key"}</button>
+            <div ref={menuRef} className="absolute right-3 z-10 mt-1.5 grid min-w-36 gap-1 rounded-[18px] border border-black/10 bg-white p-1.5 text-left shadow-[0_14px_34px_rgba(15,23,42,0.13)]" role="menu" onKeyDown={onMenuKeyDown}>
+              <button className="rounded-lg px-3 py-2 text-left text-sm hover:bg-black/[0.05]" role="menuitem" type="button" onClick={(event) => onEdit(fact, event.currentTarget)}>Edit</button>
+              <button className="rounded-lg px-3 py-2 text-left text-sm hover:bg-black/[0.05]" role="menuitem" type="button" onClick={() => onToggleExpanded(fact.id)}>{expanded ? "Hide key" : "View key"}</button>
               <button className="rounded-lg px-3 py-2 text-left text-sm text-[var(--color-danger)] hover:bg-[rgba(215,0,21,0.08)]" role="menuitem" type="button" onClick={() => onRemove(fact.id)}>Remove</button>
             </div>
           ) : null}
         </td>
       </tr>
       {expanded ? (
-        <tr className="border-t border-[var(--color-line)] bg-[var(--color-mist)]">
+        <tr className="border-t border-[var(--color-line)] bg-white/68 backdrop-blur-xl backdrop-saturate-150">
           <td className="px-3.5 py-2.5 text-xs leading-5 text-[var(--color-ink-soft)]" colSpan={5}>
             Key: {fact.key} / Created: {formatDate(fact.createdAt)} / Updated: {formatDate(fact.updatedAt)} / Source: {fact.source}
           </td>
@@ -842,7 +842,7 @@ function ConfirmModal({ dialog, cancelRef, onCancel, onConfirm }: { dialog: Extr
 function ModalShell({ title, description, children, onCancel }: { title: string; description: string; children: React.ReactNode; onCancel: () => void }) {
   return (
     <div className="fixed inset-0 z-50 grid overflow-y-auto bg-black/24 px-4 py-6 sm:place-items-center sm:px-6" role="presentation" onKeyDown={(event) => { if (event.key === "Escape") onCancel(); }}>
-      <section className="my-auto w-full max-w-xl rounded-[18px] border border-[var(--color-line)] bg-white p-4 shadow-[0_20px_56px_rgba(0,0,0,0.18)] sm:p-5" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title" aria-describedby="settings-modal-description">
+      <section className="my-auto w-full max-w-xl rounded-[2rem] border border-black/10 bg-white p-5 shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:p-5" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title" aria-describedby="settings-modal-description">
         <h3 className={`${sectionHeadingTitleClass} m-0`} id="settings-modal-title">{title}</h3>
         <p className="m-0 mt-2 text-sm leading-6 text-[var(--color-ink-soft)]" id="settings-modal-description">{description}</p>
         <div className="mt-4">{children}</div>
@@ -852,7 +852,7 @@ function ModalShell({ title, description, children, onCancel }: { title: string;
 }
 
 function SyncMetric({ label, value }: { label: string; value: number }) {
-  return <div className="rounded-[14px] border border-[var(--color-line)] bg-[var(--color-mist)] px-3 py-3"><span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">{label}</span><strong className="mt-1 block text-base text-[var(--color-ink)]">{value}</strong></div>;
+  return <div className="rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-3 py-3"><span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">{label}</span><strong className="mt-1 block text-base text-[var(--color-ink)]">{value}</strong></div>;
 }
 
 function SyncUnlockControls(props: {
@@ -884,7 +884,7 @@ function SyncUnlockControls(props: {
 }
 
 function PassphrasePanel({ title, value, setValue, primaryLabel, disabled, onCancel, onSubmit }: { title: string; value: string; setValue: (value: string) => void; primaryLabel: string; disabled?: boolean; onCancel: () => void; onSubmit: () => Promise<void> }) {
-  return <div className="grid gap-3 rounded-[16px] border border-[var(--color-line)] bg-[var(--color-mist)] px-4 py-4"><strong className="text-sm text-[var(--color-ink)]">{title}</strong><input className={inputClassSm} type="password" value={value} onChange={(event) => setValue(event.target.value)} placeholder="Sync passphrase" /><div className="flex flex-wrap gap-2"><button className={primaryButtonClass} type="button" disabled={disabled} onClick={onSubmit}>{primaryLabel}</button><button className={secondaryButtonClassMd} type="button" onClick={onCancel}>Cancel</button></div></div>;
+  return <div className="grid gap-3 rounded-[24px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-4 py-4"><strong className="text-sm text-[var(--color-ink)]">{title}</strong><input className={inputClassSm} type="password" value={value} onChange={(event) => setValue(event.target.value)} placeholder="Sync passphrase" /><div className="flex flex-wrap gap-2"><button className={primaryButtonClass} type="button" disabled={disabled} onClick={onSubmit}>{primaryLabel}</button><button className={secondaryButtonClassMd} type="button" onClick={onCancel}>Cancel</button></div></div>;
 }
 
 function titleCase(value: string): string {
