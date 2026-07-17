@@ -48,7 +48,7 @@ export function OptionsToast({ action, children, tone = "default" }: OptionsToas
   return createPortal(
     <aside
       aria-live={tone === "error" ? "assertive" : "polite"}
-      className={`fixed bottom-5 right-5 z-[9999] flex max-w-[min(520px,calc(100vw-2.5rem))] animate-[rise-in_180ms_ease-out] items-start gap-3 rounded-[18px] border border-white/15 ${toneClass} px-4 py-3 text-white shadow-[0_18px_44px_rgba(15,23,42,0.28)] sm:bottom-6 sm:right-6`}
+      className={`fixed bottom-5 right-5 z-[9999] flex max-w-[min(520px,calc(100vw-2.5rem))] animate-[rise-in_180ms_ease-out] items-start gap-3 rounded-[2rem] border border-white/15 ${toneClass} px-4 py-3 text-white shadow-[0_18px_44px_rgba(15,23,42,0.28)] sm:bottom-6 sm:right-6`}
       data-options-toast=""
       role={tone === "error" ? "alert" : "status"}
     >
