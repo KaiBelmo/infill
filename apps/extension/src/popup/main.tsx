@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { usePopupState } from "./hooks/usePopupState";
-import { iconButtonClass, primaryButtonClass, secondaryButtonClassMd } from "@/shared/ui-styles";
+import { glassSurfaceClass, glassSurfaceStrongClass, iconButtonClass, inputClassSm, panelClass, primaryButtonClass, secondaryButtonClassMd } from "@/shared/ui-styles";
 import { initBridge } from "@/cloudClient";
 import { sendMessage } from "webext-bridge/popup";
 import "../styles.css";
@@ -72,7 +72,7 @@ function Popup() {
 
   return (
     <main className="flex min-h-[420px] w-[392px] flex-col gap-3 overflow-hidden bg-[var(--color-page)] bg-[radial-gradient(circle_at_12%_-4%,rgba(0,0,0,0.04)_0,rgba(0,0,0,0)_28%),radial-gradient(circle_at_84%_12%,rgba(0,0,0,0.08)_0,rgba(0,0,0,0)_26%),linear-gradient(180deg,#fefefe_0%,#f5f5f5_42%,#fefefe_100%)] p-4 text-[var(--color-ink)]">
-      <header className="flex items-start justify-between gap-3 border-b border-[var(--color-line-soft)] pb-3">
+      <header className={`relative flex items-start justify-between gap-3 overflow-hidden rounded-[28px] ${glassSurfaceStrongClass} px-4 py-3 before:pointer-events-none before:absolute before:inset-x-5 before:top-0 before:h-px before:bg-white/90`}>
         <div className="grid gap-1">
           <span className="text-[11px] font-[780] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">AI form filling</span>
           <h1 className="m-0 [font-family:var(--font-display)] text-[28px] font-[800] tracking-[-0.04em]">Infill</h1>
@@ -99,7 +99,7 @@ function Popup() {
 
       <section
         aria-live="polite"
-        className="grid gap-4 rounded-[2rem] border border-black/10 bg-white/70 p-4 shadow-[0_1px_1px_rgba(0,0,0,0.03),0_28px_60px_-16px_rgba(30,27,75,0.18)] backdrop-blur-2xl backdrop-saturate-150"
+        className={`grid gap-4 ${panelClass} p-4`}
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--color-line-soft)] pb-3">
           <div className="grid gap-2">
@@ -126,8 +126,6 @@ function Popup() {
                   ? state.status === "Scanning" ? "Reading form fields and matching your profile…" : "Writing values into the page…"
                   : state.error
                     ? state.error
-                    : state.pendingConflictCount > 0
-                    ? `${state.pendingConflictCount} learned update${state.pendingConflictCount === 1 ? "" : "s"} need review before Infill can update this profile.`
                     : state.hasScannedFields
                       ? state.aiAssistConfigured
                         ? "Non-sensitive fields are filled. Hover any field on the page to edit or learn."
@@ -161,7 +159,7 @@ function Popup() {
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-3 rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-4 py-3">
+        <div className={`flex items-center justify-between gap-3 rounded-[18px] ${glassSurfaceClass} px-4 py-3`}>
           <span className="text-[13px] leading-5 text-[var(--color-ink-soft)]">{metricsText}</span>
           <span className="shrink-0 text-[13px] font-semibold text-[var(--color-ink)]">{state.usageText}</span>
         </div>
@@ -195,36 +193,8 @@ function Popup() {
           </div>
         ) : null}
 
-        {state.learnedNoticeCount > 0 ? (
-          <div className="flex items-center justify-between gap-3 rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-3.5 py-3 text-[13px] text-[var(--color-ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-            <span className="font-semibold">Profile updated</span>
-            <div className="flex items-center gap-2">
-              {state.canUndoLearnedNotice ? (
-                <button
-                  className="rounded-full border border-[rgba(0,0,0,0.12)] bg-white px-2.5 py-1 text-[10px] font-[780] uppercase tracking-[0.12em] text-[var(--color-ink)]"
-                  type="button"
-                  onClick={() => state.undoRecentLearnedFact().catch(() => undefined)}
-                >
-                  Undo
-                </button>
-              ) : null}
-              <span className="rounded-full bg-[var(--color-black)] px-2.5 py-1 text-[10px] font-[780] uppercase tracking-[0.12em] text-white">
-                {state.learnedNoticeCount} approved
-              </span>
-              <button
-                className="flex h-5 w-5 items-center justify-center rounded-full text-[14px] leading-none text-[var(--color-ink-soft)] hover:bg-[rgba(0,0,0,0.06)] hover:text-[var(--color-ink)] transition"
-                type="button"
-                aria-label="Dismiss notice"
-                onClick={state.dismissLearnedNotice}
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        ) : null}
-
         {aiGeneratedFields.length > 0 ? (
-          <div className="grid gap-3 rounded-[24px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+          <div className={`grid gap-3 rounded-[24px] ${glassSurfaceClass} px-3.5 py-3`}>
             <div className="flex items-start justify-between gap-3 border-b border-[var(--color-line-soft)] pb-3">
               <div className="grid gap-1">
                 <h3 className="m-0 text-[11px] font-[780] uppercase tracking-[0.12em] text-[var(--color-ink)]">Approved by AI</h3>
@@ -236,7 +206,7 @@ function Popup() {
             </div>
             <div className="grid gap-2">
               {aiGeneratedFields.map((field) => (
-                <div key={field.fieldId} className="grid gap-1 rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 p-3">
+                <div key={field.fieldId} className={`grid gap-1 rounded-[18px] ${glassSurfaceClass} p-3`}>
                   <div className="grid gap-1 border-l-2 border-[var(--color-black)] pl-3">
                     <strong className="text-[13px] text-[var(--color-ink)]">{field.label}</strong>
                     <span className="text-[12px] text-[var(--color-ink-soft)]">{field.profileKey ? `${field.profileKey} - ` : ""}{field.reason}</span>
@@ -274,7 +244,7 @@ function Popup() {
         ) : null}
 
         {state.debug ? (
-          <details className="rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-3.5 py-3 text-[12px] text-[var(--color-ink-soft)]">
+          <details className={`rounded-[18px] ${glassSurfaceClass} px-3.5 py-3 text-[12px] text-[var(--color-ink-soft)]`}>
             <summary className="cursor-pointer select-none text-[11px] font-[780] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">
               Debug scan
             </summary>
@@ -291,7 +261,7 @@ function Popup() {
               </div>
               <div className="grid gap-1">
                 <h3 className="m-0 text-[11px] font-[780] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">LLM key matcher</h3>
-                <div className="grid gap-2 rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-3 py-2">
+                <div className={`grid gap-2 rounded-[18px] ${glassSurfaceClass} px-3 py-2`}>
                   {state.debug.llmKeyMatcher ? (
                     <>
                       <div className="grid grid-cols-2 gap-2">
@@ -333,7 +303,7 @@ function Popup() {
               </div>
               <div className="grid gap-1">
                 <h3 className="m-0 text-[11px] font-[780] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">Profile data parsed</h3>
-                <div className="max-h-32 overflow-auto rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150">
+                <div className={`max-h-32 overflow-auto rounded-[18px] ${glassSurfaceClass}`}>
                   {state.debug.facts.map((fact) => (
                     <div key={fact.id} className="grid gap-1 border-b border-[var(--color-line)] px-3 py-2 last:border-b-0">
                       <div className="flex items-center justify-between gap-2">
@@ -348,7 +318,7 @@ function Popup() {
               </div>
               <div className="grid gap-1">
                 <h3 className="m-0 text-[11px] font-[780] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">Web form metadata</h3>
-                <div className="max-h-36 overflow-auto rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150">
+                <div className={`max-h-36 overflow-auto rounded-[18px] ${glassSurfaceClass}`}>
                   {state.debug.forms.map((form) => (
                     <div key={form.formId} className="grid gap-2 border-b border-[var(--color-line)] px-3 py-2 last:border-b-0">
                       <div className="grid gap-1">
@@ -372,7 +342,7 @@ function Popup() {
               </div>
               <div className="grid gap-1">
                 <h3 className="m-0 text-[11px] font-[780] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">Fill decisions</h3>
-                <div className="max-h-40 overflow-auto rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150">
+                <div className={`max-h-40 overflow-auto rounded-[18px] ${glassSurfaceClass}`}>
                 {state.debug.fields.map((field) => (
                   <div key={field.fieldId} className="grid gap-1 border-b border-[var(--color-line)] px-3 py-2 last:border-b-0">
                     <div className="flex items-center justify-between gap-2">
@@ -408,7 +378,7 @@ function Popup() {
           <label className="grid gap-2" htmlFor="popup-profile-select">
             <span className="text-[11px] font-[780] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">Active profile</span>
             <select
-              className="w-full rounded-[14px] border border-[var(--color-line)] bg-white px-3.5 py-3 text-sm text-[var(--color-ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] outline-none transition focus:border-[rgba(17,17,17,0.22)] focus:ring-4 focus:ring-[rgba(17,17,17,0.08)]"
+              className={`${inputClassSm} rounded-[14px] py-3`}
               id="popup-profile-select"
               value={state.extensionState.activeProfileId}
               onChange={(event) => state.changeActiveProfile(event.target.value)}
@@ -431,11 +401,6 @@ function Popup() {
               Add facts
             </button>
             <div className="flex items-center gap-2">
-              {state.pendingConflictCount > 0 ? (
-                <button className={`${secondaryButtonClassMd} flex-1`} type="button" onClick={state.openSettings}>
-                  Review updates
-                </button>
-              ) : null}
               {!state.isSignedIn ? (
                 <button className={`${secondaryButtonClassMd} flex-1`} type="button" onClick={state.startOAuth}>
                   Sign in
