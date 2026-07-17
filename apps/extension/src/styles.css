@@ -1,20 +1,36 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/instrument-sans-latin.woff2") format("woff2");
+}
+
+html,
+body,
+#root {
+  font-family: var(--font-sans);
+}
+
 @theme {
-  --color-ink: #141414;
-  --color-ink-soft: #5f5f5f;
-  --color-ink-muted: #777777;
+  --color-ink: #000000;
+  --color-ink-soft: #8a8a8a;
+  --color-ink-muted: #737373;
   --color-paper: #ffffff;
-  --color-mist: #f5f5f7;
-  --color-mist-deep: #ececf0;
-  --color-line: rgba(0, 0, 0, 0.08);
-  --color-line-soft: rgba(0, 0, 0, 0.055);
-  --color-black: #0b0b0d;
-  --color-black-soft: #1d1d1f;
-  --color-success: #248a3d;
-  --color-warning: #b27500;
-  --color-danger: #d70015;
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --color-page: #fefefe;
+  --color-mist: #f6f5f1;
+  --color-mist-deep: #ebe9e2;
+  --color-line: rgba(17, 17, 17, 0.1);
+  --color-line-soft: rgba(17, 17, 17, 0.065);
+  --color-black: #0a0a0a;
+  --color-black-soft: #181818;
+  --color-success: #23784a;
+  --color-warning: #9a6418;
+  --color-danger: #b42318;
+  --font-sans: "Instrument Sans", sans-serif;
+  --font-display: "Instrument Sans", sans-serif;
 }
 
 @keyframes rise-in {
@@ -69,9 +85,15 @@
   html {
     font-family: var(--font-sans);
   }
+  body.popup-document,
+  body.popup-document #root {
+    min-height: 420px;
+    width: 392px;
+  }
 
   body {
     margin: 0;
+    font-family: var(--font-sans);
     color: var(--color-ink);
     background: var(--color-mist);
   }
@@ -81,5 +103,31 @@
   select,
   textarea {
     font: inherit;
+  }
+
+  body.popup-document,
+  body.popup-document * {
+    scrollbar-color: rgba(17, 17, 17, 0.34) rgba(17, 17, 17, 0.06);
+    scrollbar-width: thin;
+  }
+
+  body.popup-document *::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+
+  body.popup-document *::-webkit-scrollbar-track {
+    background: rgba(17, 17, 17, 0.05);
+    border-radius: 999px;
+  }
+
+  body.popup-document *::-webkit-scrollbar-thumb {
+    background: rgba(17, 17, 17, 0.28);
+    border: 2px solid rgba(255, 255, 255, 0.72);
+    border-radius: 999px;
+  }
+
+  body.popup-document *::-webkit-scrollbar-thumb:hover {
+    background: rgba(17, 17, 17, 0.42);
   }
 }
