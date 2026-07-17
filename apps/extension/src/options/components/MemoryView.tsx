@@ -151,7 +151,7 @@ export function MemoryView({
           <div className="grid gap-2">
             <span aria-live="polite" className={sectionHeadingLabelClass}>{status}</span>
             <div className="grid gap-2">
-              <h2 className="m-0 text-[28px] font-[760] tracking-[-0.035em] text-[var(--color-ink)] sm:text-[32px]" id="memory-title">
+              <h2 className="m-0 [font-family:var(--font-display)] text-[28px] font-[800] tracking-[-0.04em] text-[var(--color-ink)] sm:text-[32px]" id="memory-title">
                 Import memory
               </h2>
               <p className="m-0 max-w-2xl text-sm leading-6 text-[var(--color-ink-soft)]">
@@ -162,7 +162,7 @@ export function MemoryView({
         </div>
 
         <div className="grid gap-4">
-          <section className="grid gap-4 rounded-[16px] border border-[var(--color-line)] bg-[var(--color-mist)] p-4">
+          <section className="grid gap-4 rounded-[2rem] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 p-4">
             <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_repeat(3,140px)] lg:items-end">
               <label className="grid gap-2">
                 <span className={sectionHeadingLabelClass}>Active profile</span>
@@ -242,11 +242,11 @@ export function MemoryView({
             {pendingConflicts.map((conflict) => (
               <article className="grid gap-3 rounded-[16px] border border-[rgba(178,117,0,0.14)] bg-[rgba(255,248,230,0.82)] p-4" key={conflict.id}>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl bg-white/85 p-3">
+                  <div className="rounded-[18px] border border-black/10 bg-white/85 p-3">
                     <span className={sectionHeadingLabelClass}>Current</span>
                     <p className="mt-2 text-sm font-semibold text-[var(--color-ink)]">{String(conflict.existingFact.value)}</p>
                   </div>
-                  <div className="rounded-xl bg-white/85 p-3">
+                  <div className="rounded-[18px] border border-black/10 bg-white/85 p-3">
                     <span className={sectionHeadingLabelClass}>Proposed</span>
                     <p className="mt-2 text-sm font-semibold text-[var(--color-ink)]">{conflict.proposedFact.value}</p>
                   </div>
@@ -279,13 +279,13 @@ export function MemoryView({
         </div>
 
         {detectedFacts.length === 0 ? (
-          <div className="rounded-[16px] border border-dashed border-[var(--color-line)] bg-[var(--color-mist)] px-4 py-6 text-sm leading-6 text-[var(--color-ink-soft)]">
+          <div className="rounded-[24px] border border-dashed border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-4 py-6 text-sm leading-6 text-[var(--color-ink-soft)]">
             Paste notes and run review to extract facts here.
           </div>
         ) : (
           <div className="grid gap-3">
             {detectedFacts.map((fact, index) => (
-              <article className="grid gap-3 rounded-[16px] border border-[var(--color-line)] bg-[var(--color-mist)] p-4" id={`detected-fact-${index}`} key={`${fact.key}-${index}`}>
+              <article className="grid gap-3 rounded-[2rem] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 p-4" id={`detected-fact-${index}`} key={`${fact.key}-${index}`}>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <label className="flex items-center gap-3 text-sm font-semibold text-[var(--color-ink)]">
                     <input
@@ -367,7 +367,7 @@ export function MemoryView({
               <section
                 aria-labelledby="unchecked-save-title"
                 aria-modal="true"
-                className="grid w-full max-w-[440px] gap-4 rounded-[16px] border border-[var(--color-line)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]"
+                className="grid w-full max-w-[440px] gap-4 rounded-[2rem] border border-black/10 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]"
                 role="dialog"
               >
                 <div className="grid gap-2">
@@ -398,7 +398,7 @@ export function MemoryView({
               <section
                 aria-labelledby="audit-prompt-title"
                 aria-modal="true"
-                className="grid w-full max-w-[560px] gap-0 rounded-[22px] border border-[var(--color-line)] bg-white shadow-[0_32px_80px_rgba(15,23,42,0.22)] overflow-hidden"
+                className="grid w-full max-w-[560px] gap-0 rounded-[2rem] border border-black/10 bg-white shadow-[0_32px_80px_rgba(15,23,42,0.22)] overflow-hidden"
                 role="dialog"
               >
                 {/* Header */}
@@ -413,7 +413,7 @@ export function MemoryView({
                   </div>
                   <button
                     aria-label="Close dialog"
-                    className="ml-4 mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-mist)] text-[var(--color-ink-soft)] transition hover:bg-[var(--color-mist-deep)] hover:text-[var(--color-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--color-black-soft)] focus:ring-offset-2"
+                    className="ml-4 mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/[0.06] text-black/60 transition hover:bg-black/10 hover:text-black focus:outline-none focus:ring-4 focus:ring-black/10"
                     type="button"
                     onClick={() => { setShowPromptModal(false); }}
                   >
@@ -437,13 +437,13 @@ export function MemoryView({
                       Copy this prompt into your other AI provider
                     </h4>
 
-                    <div className="relative mt-3 rounded-[14px] border border-[var(--color-line)] bg-[var(--color-mist)] overflow-hidden">
+                    <div className="relative mt-3 rounded-[18px] border border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 overflow-hidden">
                       <div className="max-h-[200px] overflow-y-auto p-4 pb-12 font-mono text-[11.5px] leading-[1.65] text-[var(--color-ink-soft)] whitespace-pre-wrap select-all">
                         {AUDIT_PROMPT}
                       </div>
                       <div className="absolute bottom-3 right-3">
                         <button
-                          className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[var(--color-black-soft)] px-3.5 text-[13px] font-[640] text-white shadow-[0_4px_12px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-black-soft)] focus:ring-offset-2"
+                          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[var(--color-black)] px-3.5 text-[13px] font-[640] text-white shadow-[0_4px_12px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-black-soft)] focus:ring-offset-2"
                           type="button"
                           onClick={() => {
                             navigator.clipboard.writeText(AUDIT_PROMPT).then(() => {
@@ -490,7 +490,7 @@ export function MemoryView({
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end gap-2 border-t border-[var(--color-line)] bg-[var(--color-mist)] px-6 py-4">
+                <div className="flex items-center justify-end gap-2 border-t border-black/10 bg-white/68 backdrop-blur-xl backdrop-saturate-150 px-6 py-4">
                   <button
                     className={primaryButtonClass}
                     type="button"
@@ -511,7 +511,7 @@ export function MemoryView({
 
 function MemoryStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-[var(--color-line)] bg-white px-3.5 py-2.5">
+    <div className="rounded-[18px] border border-black/10 bg-white px-3.5 py-2.5">
       <span className={sectionHeadingLabelClass}>{label}</span>
       <strong className="mt-1 block text-sm text-[var(--color-ink)]">{value}</strong>
     </div>
