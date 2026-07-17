@@ -6,6 +6,7 @@ const LOCAL_CLOUD_STATE_KEY = "infillCloudState";
 const AUTH_STATE_KEY = "infillAuthState";
 const AUTH_CODE_VERIFIER_KEY = "infillAuthCodeVerifier";
 const AUTH_ERROR_KEY = "infillAuthError";
+const inProgressAuthExchanges = new Set<string>();
 
 export async function startAuthFlow(): Promise<void> {
   const state = crypto.randomUUID();
@@ -16,6 +17,7 @@ export async function startAuthFlow(): Promise<void> {
     [AUTH_STATE_KEY]: state,
     [AUTH_CODE_VERIFIER_KEY]: codeVerifier,
   });
+  await chrome.storage.session.remove(AUTH_ERROR_KEY);
 
   const cloudState = await getCloudStateWithPersistedConfig();
   const webBaseUrl = cloudState.config.webBaseUrl;
@@ -59,6 +61,7 @@ export async function handlePossibleAuthCallback(tabId: number, rawUrl: string):
   }
 
   let shouldClearTemporaryAuthState = false;
+  let ownedExchangeKey: string | undefined;
 
   try {
     const code = url.searchParams.get("code");
@@ -78,12 +81,20 @@ export async function handlePossibleAuthCallback(tabId: number, rawUrl: string):
     const stored = await chrome.storage.session.get([AUTH_STATE_KEY, AUTH_CODE_VERIFIER_KEY]);
 
     if (!stored[AUTH_STATE_KEY] || !stored[AUTH_CODE_VERIFIER_KEY]) {
-      throw new Error("Missing temporary auth state. Try signing in again.");
+      return;
     }
 
     if (returnedState !== stored[AUTH_STATE_KEY]) {
       throw new Error("Auth state mismatch. This may be a CSRF attempt.");
     }
+
+    const exchangeKey = `${returnedState}:${code}`;
+    if (inProgressAuthExchanges.has(exchangeKey)) {
+      shouldClearTemporaryAuthState = false;
+      return;
+    }
+    inProgressAuthExchanges.add(exchangeKey);
+    ownedExchangeKey = exchangeKey;
 
     const apiBaseUrl = cloudState.config.apiBaseUrl;
     if (!apiBaseUrl) {
@@ -118,6 +129,7 @@ export async function handlePossibleAuthCallback(tabId: number, rawUrl: string):
     const auth = normalizeAuth(rawSession);
     await persistAuth(auth);
     await prepareProfileSyncAfterAuth();
+    await chrome.storage.session.remove(AUTH_ERROR_KEY);
 
     await openOptionsProfile(tabId);
   } catch (error) {
@@ -126,6 +138,9 @@ export async function handlePossibleAuthCallback(tabId: number, rawUrl: string):
     await chrome.storage.session.set({ [AUTH_ERROR_KEY]: message });
     await openOptionsProfile(tabId);
   } finally {
+    if (ownedExchangeKey) {
+      inProgressAuthExchanges.delete(ownedExchangeKey);
+    }
     if (shouldClearTemporaryAuthState) {
       await chrome.storage.session.remove([AUTH_STATE_KEY, AUTH_CODE_VERIFIER_KEY]);
     }
