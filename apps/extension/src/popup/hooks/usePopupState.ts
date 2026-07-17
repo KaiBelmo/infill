@@ -1,16 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useProfileStore, toPublicExtensionState } from "@/background/profile-store";
 import { useCloudClientStore } from "@/shared/stores/cloud-client-store";
-import type { LearnedFactUndo } from "@/shared/types";
 import { usePopupStore } from "../popup-store";
-import { sendMessage } from "webext-bridge/popup";
 import { debugLog } from "@/shared/debug-log";
 
 export function usePopupState() {
   const profileState = useProfileStore();
   const extensionState = useMemo(() => toPublicExtensionState(profileState), [profileState]);
-  const [learnedNoticeCount, setLearnedNoticeCount] = useState(0);
-  const [learnedNoticeUndo, setLearnedNoticeUndo] = useState<LearnedFactUndo | undefined>();
   const { cloudState, isSignedIn, canUseCloud } = useCloudClientStore();
 
   const forms = usePopupStore((s) => s.forms);
@@ -31,19 +27,6 @@ export function usePopupState() {
   }, []);
 
   useEffect(() => {
-    if (extensionState.recentLearnedCount <= 0) return;
-    debugLog("[popup] recent learned facts notice", {
-      recentLearnedCount: extensionState.recentLearnedCount,
-      recentLearnedUndos: extensionState.recentLearnedUndos.length,
-      activeProfileId: extensionState.activeProfileId,
-      factCount: extensionState.facts.length
-    });
-    setLearnedNoticeCount(extensionState.recentLearnedCount);
-    setLearnedNoticeUndo(extensionState.recentLearnedUndos[0]);
-    sendMessage("clear-recent-learned-notice", null, "background").catch(() => undefined);
-  }, [extensionState.recentLearnedCount]);
-
-  useEffect(() => {
     debugLog("[popup] profile state snapshot", {
       activeProfileId: extensionState.activeProfileId,
       profiles: extensionState.profiles.length,
@@ -61,25 +44,6 @@ export function usePopupState() {
     extensionState.recentLearnedUndos.length
   ]);
 
-  async function undoRecentLearnedFact() {
-    if (!learnedNoticeUndo) return;
-    await sendMessage("undo-learned-fact", { undo: learnedNoticeUndo }, "background");
-    setLearnedNoticeCount(0);
-    setLearnedNoticeUndo(undefined);
-  }
-
-  function dismissLearnedNotice() {
-    setLearnedNoticeCount(0);
-    setLearnedNoticeUndo(undefined);
-  }
-
-  useEffect(() => {
-    if (learnedNoticeCount <= 0) return;
-    const timer = setTimeout(() => {
-      dismissLearnedNotice();
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [learnedNoticeCount]);
 
 
   const allFields = useMemo(() => forms.flatMap((form) => form.fields), [forms]);
@@ -99,7 +63,6 @@ export function usePopupState() {
     [mappings]
   );
   const hasScannedFields = fieldCount > 0;
-  const pendingConflictCount = extensionState.pendingConflicts.length;
   const signedInPlan = cloudState?.auth?.account.subscription.plan ?? "free";
   const localOllamaEnabled = Boolean(cloudState?.config.localOllamaEnabled);
   const cloudAiEnabled = Boolean(cloudState?.config.cloudAssistEnabled && canUseCloud);
@@ -129,10 +92,8 @@ export function usePopupState() {
     activeProfile, hasActiveProfile, savedFactCount,
     fieldCount, readyCount, blockedCount,
     hasScannedFields,
-    pendingConflictCount, isSignedIn, canUseCloud,
+    isSignedIn, canUseCloud,
     localOllamaEnabled, cloudAiEnabled, aiAssistConfigured,
-    learnedNoticeCount, canUndoLearnedNotice: Boolean(learnedNoticeUndo), undoRecentLearnedFact,
-    dismissLearnedNotice,
     cloudBadge, aiBadge, billingLabel, usageText,
     changeActiveProfile: actions.changeActiveProfile, scanActiveTab: actions.scanActiveTab,
     openSettings: actions.openSettings, openBilling: actions.openBilling, startOAuth: actions.startOAuth,
